@@ -16,6 +16,9 @@
 //       una curva) o "lineal" (la punta va en línea recta).
 // velocidad: % de la velocidad máxima para llegar a ese punto.
 // pausa: segundos de espera al llegar.
+// escena (opcional, en el programa): objetos sobre la mesa al empezar, con
+//       posición relativa a la base del brazo: [{ "tipo": "cubo", "p": [x,y,z], "ry": 0 }].
+//       Al reproducir desde el primer punto se vuelve a armar.
 // tiempo (opcional): segundos exactos para llegar desde el punto anterior.
 //       Lo usan las trayectorias grabadas en continuo; el tramo se recorre a
 //       velocidad constante para que el movimiento salga fluido.
@@ -79,6 +82,14 @@ export function normalizarPrograma(datos, config) {
   });
   const prog = nuevoPrograma(String(datos.nombre || 'Programa importado').slice(0, 60), config);
   prog.puntos = puntos;
+  // Objetos de la escena al empezar el programa (opcional).
+  if (Array.isArray(datos.escena)) {
+    prog.escena = datos.escena
+      .filter((it) => it && typeof it.tipo === 'string' && Array.isArray(it.p) && it.p.length === 3
+        && it.p.every((v) => Number.isFinite(Number(v))))
+      .slice(0, 200)
+      .map((it) => ({ tipo: it.tipo.slice(0, 20), p: it.p.map(Number), ry: Number.isFinite(Number(it.ry)) ? Number(it.ry) : 0 }));
+  }
   return prog;
 }
 

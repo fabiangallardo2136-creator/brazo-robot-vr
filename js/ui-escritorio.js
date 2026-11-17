@@ -110,7 +110,9 @@ export function crearUIEscritorio(raiz, app, { alMostrarPanel3D }) {
   const lista = h('ol', { class: 'puntos' });
   const botonPlay = h('button', { class: 'primario', onclick: () => app.alternarReproduccion() }, '▶ Reproducir');
   const bucle = h('input', { type: 'checkbox', onchange: () => app.alternarBucle() });
-  const botonTrayectoria = h('button', { onclick: () => app.alternarTrayectoria() }, '● Grabar trayectoria (T)');
+  const verCamino = h('input', { type: 'checkbox', checked: true, onchange: () => app.trayectoria.alternarCamino() });
+  const verRastro = h('input', { type: 'checkbox', onchange: () => app.trayectoria.alternarRastro() });
+  const botonTrayectoria = h('button', { onclick: () => app.alternarTrayectoria() }, '● Grabar en tiempo real (T)');
   const tipoGrab = h('select', {
     'aria-label': 'Tipo de movimiento de los puntos nuevos',
     onchange: (e) => { if (e.target.value !== app.tipoGrabacion) app.alternarTipoGrabacion(); },
@@ -174,6 +176,17 @@ export function crearUIEscritorio(raiz, app, { alMostrarPanel3D }) {
       h('button', { class: 'primario', onclick: () => app.grabarPunto() }, '● Grabar punto (R)'),
       botonPlay),
     h('div', { class: 'botones' }, botonTrayectoria),
+    h('div', { class: 'subtitulo' }, 'Rutinas listas (reemplazan el programa; el anterior queda guardado)'),
+    h('div', { class: 'botones' },
+      h('button', { onclick: () => app.generarRutina('saludar') }, 'Saludar'),
+      h('button', { onclick: () => app.generarRutina('batir') }, 'Batir crema'),
+      h('button', { onclick: () => app.generarRutina('circulo') }, 'Dibujar círculo')),
+    h('div', { class: 'botones' },
+      h('label', { class: 'check' }, verCamino, ' Ver trayectoria'),
+      h('label', { class: 'check' }, verRastro, ' Rastro de la punta')),
+    h('div', { class: 'botones' },
+      h('button', { onclick: () => app.capturarEscena(), title: 'Guarda la posición de los objetos en el programa' }, 'Fijar escena'),
+      h('button', { onclick: () => app.restaurarEscena() }, 'Reponer objetos')),
     h('div', { class: 'botones' },
       h('span', { class: 'etiqueta-fuente' }, 'Grabar puntos como'), tipoGrab),
     h('label', { class: 'check' }, bucle, ' Repetir en bucle'),
@@ -269,7 +282,7 @@ export function crearUIEscritorio(raiz, app, { alMostrarPanel3D }) {
     if (t === 'entorno') verEntorno.checked = app.entornoVisible();
     if (t === 'modo') {
       tipoGrab.value = app.tipoGrabacion;
-      botonTrayectoria.textContent = app.grabandoTrayectoria ? '■ Terminar trayectoria (T)' : '● Grabar trayectoria (T)';
+      botonTrayectoria.textContent = app.grabandoTrayectoria ? '■ Terminar grabación (T)' : '● Grabar en tiempo real (T)';
       botonTrayectoria.classList.toggle('peligro', app.grabandoTrayectoria);
     }
   });

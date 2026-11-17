@@ -21,6 +21,22 @@ export function crearApp(config, brazoVisual) {
     ik(semilla, objetivoLocal, opciones) {
       return resolverIK(cadenaIK, config, semilla, objetivoLocal, opciones).angulos;
     },
+    // Punta en objetivoLocal con la herramienta apuntando hacia abajo.
+    // Supone un brazo como el de config-brazo.js: J2, J3 y J5 giran en ejes
+    // paralelos, así que la herramienta queda vertical si J2 + J3 + J5 = 180°.
+    vertical(semilla, objetivoLocal) {
+      const lim = (i, v) => Math.min(config.articulaciones[i].max, Math.max(config.articulaciones[i].min, v));
+      let ang = semilla.slice();
+      ang[3] = 0;
+      const pesos = [1, 1, 1, 0, 0, 0];
+      for (let k = 0; k < 8; k++) {
+        ang[4] = lim(4, 180 - ang[1] - ang[2]);
+        ang = resolverIK(cadenaIK, config, ang, objetivoLocal, { iteraciones: 25, pesos }).angulos;
+      }
+      ang[4] = lim(4, 180 - ang[1] - ang[2]);
+      const error = cinematica.fk(ang).distanceTo(objetivoLocal);
+      return { angulos: ang, error };
+    },
   };
 
   const reproductor = new Reproductor(controlador, config, cinematica);
@@ -162,6 +178,7 @@ export function crearApp(config, brazoVisual) {
       app.avisar('modo');
     },
     grabarPunto() {
+      if (!app.programa.puntos.length && !app.programa.escena) app.capturarEscena(false);
       app.programa.puntos.push(nuevoPunto(controlador.objetivo, controlador.pinzaObjetivo, app.tipoGrabacion));
       app.guardarCambios();
       app.informar(`Punto P${app.programa.puntos.length} grabado (${app.tipoGrabacion})`);
@@ -209,6 +226,10 @@ export function crearApp(config, brazoVisual) {
       app.informar(`Yendo a P${i + 1}`);
     },
     reproducir(desde = 0) {
+      if (app.grabandoTrayectoria) app.alternarTrayectoria();
+      if (desde === 0 && app.programa.escena && app.objetos && app.programa.puntos.length) {
+        app.objetos.restaurar(app.programa.escena);
+      }
       if (!reproductor.iniciar(app.programa, { bucle: app.bucle, desde })) {
         return app.informar('El programa no tiene puntos: graba alguno primero');
       }
@@ -247,42 +268,83 @@ export function crearApp(config, brazoVisual) {
       app.informar(`Punto insertado como P${i + 2}`);
     },
 
-    // --- Grabación continua (trayectoria) -------------------------------------
-    // Mientras está activa, cada 0,2 s que el brazo se haya movido se guarda un
-    // punto con el tiempo transcurrido, para repetir el movimiento tal cual.
+    // --- Grabación en tiempo real ---------------------------------------------
+    // Al empezar se crea un programa nuevo ("Grabación N") y se anota la escena.
+    // Cada 0,1 s que el brazo se haya movido (con la mano, las palancas o los
+    // deslizadores) se guarda un punto con el tiempo transcurrido; al
+    // reproducirlo se repite el movimiento con el mismo ritmo.
     alternarTrayectoria() {
       if (app.grabandoTrayectoria) {
         app.grabandoTrayectoria = false;
-        app.informar(`Trayectoria grabada: ${app._muestras} puntos`);
+        // Último punto: donde quedó el brazo.
+        app._tomarMuestra();
+        if (app.programa.puntos.length) almacen.guardar(app.programa);
+        app.informar(`Grabación terminada: ${app.programa.puntos.length} puntos, guardada como "${app.programa.nombre}"`);
+        app.avisar('archivos');
       } else {
         reproductor.detener();
+        if (app.programa.puntos.length) almacen.guardar(app.programa); // no perder el programa anterior
+        const existentes = new Set(almacen.listar());
+        let n = 1;
+        while (existentes.has(`Grabación ${n}`)) n++;
+        app.programa = nuevoPrograma(`Grabación ${n}`, config);
+        app.capturarEscena?.(false);
         app.grabandoTrayectoria = true;
-        app._muestras = 0;
         app._tMuestra = 0;
         app._ultimaMuestra = null;
-        app.informar('Grabando trayectoria: mueve el brazo; pulsa de nuevo para terminar');
+        app._tomarMuestra();
+        app.guardarCambios();
+        app.informar('● Grabando: mueve el brazo (toma la punta); pulsa otra vez para terminar');
       }
       app.avisar('modo');
     },
-    actualizarGrabacion(dt) {
-      if (!app.grabandoTrayectoria) return;
-      app._tMuestra += dt;
-      if (app._tMuestra < 0.2) return;
+    // Guarda un punto si el brazo o la pinza cambiaron desde el anterior.
+    _tomarMuestra() {
       const ang = controlador.objetivo;
       const pinza = controlador.pinzaObjetivo;
       const u = app._ultimaMuestra;
-      const cambio = !u || u.pinza !== pinza || ang.some((v, i) => Math.abs(v - u.ang[i]) > 0.5);
-      if (!cambio) {
-        // Quieto: el tiempo sigue corriendo para respetar las pausas (máx. 5 s).
-        app._tMuestra = Math.min(app._tMuestra, 5);
-        return;
-      }
+      const cambio = !u || u.pinza !== pinza || ang.some((v, i) => Math.abs(v - u.ang[i]) > 0.3);
+      if (!cambio) return false;
       const tiempo = u ? app._tMuestra : undefined;
       app.programa.puntos.push(nuevoPunto(ang, pinza, 'articular', tiempo));
       app._ultimaMuestra = { ang: ang.slice(), pinza };
       app._tMuestra = 0;
-      app._muestras++;
+      return true;
+    },
+    actualizarGrabacion(dt) {
+      if (!app.grabandoTrayectoria) return;
+      app._tMuestra += dt;
+      if (app._tMuestra < 0.1) return;
+      if (app._tomarMuestra()) app.guardarCambios();
+      // Quieto: el tiempo sigue corriendo para respetar las pausas (máx. 5 s).
+      else app._tMuestra = Math.min(app._tMuestra, 5);
+    },
+
+    // --- Escena del programa (objetos al empezar) ---------------------------
+    capturarEscena(avisar = true) {
+      if (!app.objetos) return;
+      app.programa.escena = app.objetos.capturar();
+      almacen.guardarActual(app.programa);
+      if (avisar) app.informar(`Escena inicial guardada en el programa (${app.programa.escena.length} objetos)`);
+    },
+    restaurarEscena() {
+      if (!app.objetos || !app.programa.escena) return app.informar('Este programa no tiene escena guardada');
+      app.objetos.restaurar(app.programa.escena);
+      app.informar('Escena del programa restaurada');
+    },
+    quitarEscena() {
+      delete app.programa.escena;
       app.guardarCambios();
+      app.informar('El programa ya no restaura objetos');
+    },
+    // Reemplaza el programa actual (guardando antes el anterior si tenía puntos).
+    reemplazarPrograma(datos) {
+      reproductor.detener();
+      if (app.programa.puntos.length) almacen.guardar(app.programa);
+      app.programa = normalizarPrograma(datos, config);
+      app.puntoSel = -1;
+      app.guardarCambios();
+      app.avisar('archivos');
     },
 
     // --- Archivos ----------------------------------------------------------

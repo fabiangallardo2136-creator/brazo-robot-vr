@@ -10,15 +10,18 @@ import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFa
 import { iniciarArrastre, aplicarArrastre } from './disposicion.js';
 
 /**
- * Configura el botón de entrada. alCambiarModo(modo) recibe 'mixto'
- * (sesión AR: el fondo se puede alternar), 'vr' o null al salir.
+ * Configura los botones de entrada: "Entrar en VR" (fondo virtual) y
+ * "Entrar con sala real" (passthrough). alCambiarModo(modo, { salaReal })
+ * recibe 'mixto' (sesión AR: el fondo se puede alternar dentro), 'vr' o null
+ * al salir.
  */
-export async function configurarBotonXR(renderer, boton, app, alCambiarModo) {
+export async function configurarBotonXR(renderer, { boton, botonReal }, app, alCambiarModo) {
   const poner = (texto, habilitado, titulo = '') => {
     boton.textContent = texto;
     boton.disabled = !habilitado;
     boton.title = titulo;
   };
+  botonReal.hidden = true;
   if (!window.isSecureContext) return poner('VR requiere HTTPS', false, 'Abre la app por https:// (ver README)');
   if (!('xr' in navigator)) return poner('WebXR no disponible', false, 'Usa el navegador del Quest.');
   const soporta = async (modo) => {
@@ -34,14 +37,18 @@ export async function configurarBotonXR(renderer, boton, app, alCambiarModo) {
   if (!vr && !ar) return poner('VR no disponible aquí', false, 'No hay visor conectado o el navegador no permite VR.');
 
   let sesion = null;
-  const listo = () => poner('Entrar al visor', true, ar ? 'Dentro podrás alternar entre fondo virtual y tu sala real' : '');
+  const listo = () => {
+    poner('Entrar en VR', true, ar ? 'Dentro podrás pasar a tu sala real (Escena → Fondo)' : '');
+    botonReal.hidden = !ar;
+    botonReal.textContent = 'Entrar con sala real';
+  };
   listo();
 
   async function pedir(modo) {
     return navigator.xr.requestSession(modo, { optionalFeatures: ['local-floor', 'bounded-floor'] });
   }
 
-  boton.addEventListener('click', async () => {
+  async function entrar(salaReal) {
     if (sesion) {
       await sesion.end();
       return;
@@ -61,15 +68,18 @@ export async function configurarBotonXR(renderer, boton, app, alCambiarModo) {
         alCambiarModo(null);
         listo();
       });
-      alCambiarModo(modo);
+      alCambiarModo(modo, { salaReal: salaReal && modo === 'mixto' });
       await renderer.xr.setSession(sesion);
       poner('Salir del visor', true);
+      botonReal.hidden = true;
     } catch (e) {
       sesion = null;
       alCambiarModo(null);
       app.informar(`No se pudo entrar: ${e.message}`);
     }
-  });
+  }
+  boton.addEventListener('click', () => entrar(false));
+  botonReal.addEventListener('click', () => entrar(true));
 }
 
 export function configurarVR({ renderer, escena, app, paneles, brazo, disposicion, objetos, mandos, panelMuneca }) {
@@ -140,12 +150,6 @@ export function configurarVR({ renderer, escena, app, paneles, brazo, disposicio
     return { panel: paneles.find((p) => p.malla === hit.object), hit };
   }
 
-  function tocaEfector(m) {
-    const posAsa = brazo.efector.getWorldPosition(tmp);
-    const posMano = m.c.getWorldPosition(tmp2);
-    return posMano.distanceTo(posAsa) < 0.1 || raycaster.intersectObject(brazo.zonaAgarre).length > 0;
-  }
-
   function presionar(m, boton) {
     apuntar(m);
     if (boton === 'gatillo') {
@@ -156,23 +160,37 @@ export function configurarVR({ renderer, escena, app, paneles, brazo, disposicio
         return;
       }
     }
-    // ¿Agarra la punta del brazo? Cerca de la mano o apuntándola con el rayo.
-    if (tocaEfector(m)) {
+    // Candidatos: la punta del brazo, un objeto, o el panel/pantallas/brazo.
+    // Gana el más cercano; lo que está al alcance de la mano tiene prioridad.
+    const posMano = m.c.getWorldPosition(tmp2).clone();
+    const cand = [];
+    const dPunta = posMano.distanceTo(brazo.efector.getWorldPosition(tmp));
+    if (dPunta < 0.08) cand.push({ tipo: 'punta', d: dPunta * 0.5 });
+    const hitAsa = raycaster.intersectObject(brazo.zonaAgarre)[0];
+    if (hitAsa) cand.push({ tipo: 'punta', d: hitAsa.distance });
+    if (boton === 'grip') {
+      const cerca = objetos.cercano(posMano, 0.05);
+      if (cerca) cand.push({ tipo: 'objeto', o: cerca.o, d: cerca.d * 0.5 });
+      const ho = objetos.buscar(raycaster);
+      if (ho) cand.push({ tipo: 'objeto', o: ho.o, d: ho.distancia });
+      const hd = disposicion.buscar(raycaster);
+      if (hd) cand.push({ tipo: 'disp', o: hd.o, d: hd.distancia + 0.01 });
+    }
+    cand.sort((x, y) => x.d - y.d);
+    const elegido = cand[0];
+    if (!elegido) return;
+    if (elegido.tipo === 'punta') {
       const posAsa = brazo.efector.getWorldPosition(tmp);
       m.agarre = { boton, offset: m.c.worldToLocal(posAsa.clone()) };
       app.iniciarArrastreEfector();
       vibrar(m, 0.6, 40);
       return;
     }
-    if (boton !== 'grip') return;
-    // Con el grip: un objeto de la mesa, o el panel, las pantallas o el brazo.
-    const hitObj = objetos.buscar(raycaster);
-    const hitDisp = disposicion.buscar(raycaster);
-    if (hitObj && (!hitDisp || hitObj.distancia <= hitDisp.distancia)) {
-      objetos.tomarConMano(hitObj.o);
-      m.moviendo = { obj: hitObj.o.malla, objeto: hitObj.o, relativa: iniciarArrastre(m.c.matrixWorld, hitObj.o.malla) };
-    } else if (hitDisp) {
-      m.moviendo = { obj: hitDisp.o.obj, soloGiroY: hitDisp.o.soloGiroY, relativa: iniciarArrastre(m.c.matrixWorld, hitDisp.o.obj) };
+    if (elegido.tipo === 'objeto') {
+      objetos.tomarConMano(elegido.o);
+      m.moviendo = { obj: elegido.o.malla, objeto: elegido.o, relativa: iniciarArrastre(m.c.matrixWorld, elegido.o.malla) };
+    } else {
+      m.moviendo = { obj: elegido.o.obj, soloGiroY: elegido.o.soloGiroY, relativa: iniciarArrastre(m.c.matrixWorld, elegido.o.obj) };
     }
     if (m.moviendo) {
       m.rayo.material = matRayoMover;

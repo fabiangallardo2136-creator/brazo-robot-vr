@@ -15,6 +15,8 @@ import { agregarFuentes } from './fuentes.js';
 import { crearObjetos } from './objetos.js';
 import { crearDisposicion } from './disposicion.js';
 import { crearMandos } from './mandos.js';
+import { crearVistaTrayectoria } from './trayectoria.js';
+import { generarRutina } from './generadores.js';
 
 const contenedor = document.getElementById('escena');
 // alpha: true para que el fondo "sala real" (passthrough) deje ver el taller.
@@ -25,7 +27,7 @@ renderer.xr.enabled = true;
 renderer.xr.setReferenceSpaceType('local-floor');
 contenedor.append(renderer.domElement);
 
-const { escena, camara, objetivoCamara, entorno, mesa, modoMixto } = crearEscena(BRAZO);
+const { escena, camara, objetivoCamara, piso, mesaGrupo, mesa, modoMixto } = crearEscena(BRAZO);
 
 // Brazo sobre la mesa
 const brazo = crearBrazoVisual(BRAZO);
@@ -48,27 +50,39 @@ app.reiniciarCubos = () => {
   objetos.reiniciar();
   app.informar('Mesa reiniciada con 3 cubos');
 };
-app.entornoVisible = () => entorno.visible;
+// Piso y mesa virtuales (se muestran u ocultan por separado)
+app.pisoVisible = () => piso.visible;
+app.mesaVisible = () => mesaGrupo.visible;
+app.alternarPiso = () => { piso.visible = !piso.visible; app.avisar('entorno'); };
+app.alternarMesa = () => { mesaGrupo.visible = !mesaGrupo.visible; app.avisar('entorno'); };
+app.entornoVisible = () => piso.visible || mesaGrupo.visible;
 app.alternarEntorno = () => {
-  entorno.visible = !entorno.visible;
+  const v = !app.entornoVisible();
+  piso.visible = v;
+  mesaGrupo.visible = v;
   app.avisar('entorno');
 };
 
-// Fondo: virtual o sala real (solo dentro de una sesión AR del visor).
+// Fondo: virtual (cielo opaco, se ve como VR) o sala real (passthrough).
+// La sala real solo existe dentro de una sesión AR del visor.
 let fondoReal = false;
+function fijarFondo(real) {
+  fondoReal = real;
+  modoMixto(real);
+  piso.visible = !real;
+  mesaGrupo.visible = !real;
+  app.avisar('entorno');
+}
 app.fondoReal = () => (app.modoXR === 'mixto' ? fondoReal : app.modoXR === 'vr' ? undefined : false);
 app.alternarFondo = () => {
   if (app.modoXR !== 'mixto') {
     app.informar(app.modoXR === 'vr'
       ? 'Este visor no permite ver la sala real desde el navegador'
-      : 'El fondo de sala real se activa dentro del visor');
+      : 'La sala real se ve solo dentro del visor');
     return;
   }
-  fondoReal = !fondoReal;
-  modoMixto(fondoReal);
-  entorno.visible = !fondoReal;
-  app.avisar('entorno');
-  app.informar(fondoReal ? 'Fondo: tu sala real' : 'Fondo: virtual');
+  fijarFondo(!fondoReal);
+  app.informar(fondoReal ? 'Fondo: tu sala real (passthrough)' : 'Fondo: virtual');
 };
 
 // Marcador del objetivo de la cinemática inversa
@@ -78,6 +92,11 @@ const marcador = new THREE.Mesh(
 );
 marcador.visible = false;
 escena.add(marcador);
+
+// Trayectoria del programa y rastro de la punta
+const vistaTrayectoria = crearVistaTrayectoria({ brazo, app });
+app.trayectoria = vistaTrayectoria;
+app.generarRutina = (id) => generarRutina(app, id);
 
 // Mando directo con palancas y botones (se configura en la pestaña Controles)
 const mandos = crearMandos(app, { alTraerPanel: () => app.traerPanel() });
@@ -136,7 +155,7 @@ const orbita = new OrbitControls(camara, renderer.domElement);
 orbita.target.copy(objetivoCamara);
 orbita.enableDamping = true;
 orbita.update();
-window.depurar = { renderer, escena, camara, orbita, disposicion, objetos, mandos, panel, panelMuneca }; // para la consola
+window.depurar = { renderer, escena, camara, orbita, disposicion, objetos, mandos, panel, panelMuneca, vistaTrayectoria }; // para la consola
 
 const puntero = configurarPunteroEscritorio({ renderer, camara, app, panel, brazo, orbita });
 const vr = configurarVR({
@@ -151,29 +170,25 @@ const ui = crearUIEscritorio(document.getElementById('lateral'), app, {
 
 // Entrar y salir del visor
 let panelEnEscritorio = true;
-configurarBotonXR(renderer, document.getElementById('boton-vr'), app, (modo) => {
+configurarBotonXR(renderer, {
+  boton: document.getElementById('boton-vr'),
+  botonReal: document.getElementById('boton-real'),
+}, app, (modo, { salaReal = false } = {}) => {
   if (modo) {
     panelEnEscritorio = panel.malla.visible;
     panel.malla.visible = true;
     document.body.classList.add('en-vr');
-    // En sesión AR se empieza con fondo virtual (se ve igual que VR) y el
-    // panel permite pasar a la sala real.
     renderer.setClearColor(0x000000, 0);
-    fondoReal = false;
-    modoMixto(false);
     app.modoXR = modo;
+    fijarFondo(salaReal);
     app.informar(modo === 'mixto'
-      ? 'Escena → "Fondo" para ver tu sala real'
+      ? (salaReal ? 'Sala real · Escena → Fondo para volver a lo virtual' : 'Escena → Fondo para ver tu sala real')
       : 'Este visor no permite ver la sala real desde el navegador');
   } else {
     panel.malla.visible = panelEnEscritorio;
     document.body.classList.remove('en-vr');
-    if (fondoReal) {
-      fondoReal = false;
-      modoMixto(false);
-      entorno.visible = true;
-    }
     app.modoXR = null;
+    if (fondoReal) fijarFondo(false);
   }
   app.avisar('entorno');
 });
@@ -210,6 +225,7 @@ renderer.setAnimationLoop(() => {
   app.actualizarGrabacion(dt);
   brazo.fijarAngulos(app.controlador.actual);
   objetos.actualizar(dt, app.controlador.pinzaActual);
+  vistaTrayectoria.actualizar();
   brazo.fijarPinza(objetos.aperturaVisible(app.controlador.pinzaActual));
   brazo.resaltarAsa(resaltarVR || puntero.resaltado());
 

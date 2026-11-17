@@ -26,10 +26,10 @@ Está pensada para que en una **versión 2** se conecte al brazo real: toda
 orden pasa por un "driver" intercambiable (hoy el simulador; después USB o
 Wi-Fi hacia un ESP32/Arduino).
 
-> **Estado:** la versión de escritorio está probada y la VR básica se probó en
-> el Quest 2. El panel con pestañas, el panel de muñeca, los controles
-> asignables, el fondo de sala real y los objetos todavía no se han probado en
-> el visor.
+> **Estado:** la versión de escritorio está probada y Fabián probó en el
+> Quest 2 el panel con pestañas, los controles y los objetos. El fondo
+> virtual opaco, el botón *Entrar con sala real*, la grabación en tiempo real,
+> las rutinas y la trayectoria todavía no se han probado en el visor.
 
 ## Probar en el PC
 
@@ -130,11 +130,16 @@ autofirmado. Los archivos `.pem` están en `.gitignore`.
 
 ## Qué se ve y cómo se usa en VR
 
-Pulsa **Entrar al visor**. Si el Quest lo permite, la app entra en una sesión
-de realidad mixta con **fondo virtual** (se ve igual que VR) y desde el panel
-(*Escena → Fondo*) pasas a ver **tu sala real** (passthrough; en el Quest 2 en
-blanco y negro) sin salir del visor. Si el navegador no permite realidad
-mixta, entra en VR normal y el panel lo indica.
+Hay dos botones: **Entrar en VR** (todo virtual) y **Entrar con sala real**
+(passthrough: ves tu taller, en el Quest 2 en blanco y negro). Dentro del
+visor cambias entre los dos con *Escena → Fondo*, sin salir. Con la sala real
+el piso y la mesa virtuales empiezan ocultos y se activan por separado
+(*Piso virtual*, *Mesa virtual*). Si el navegador no permite realidad mixta,
+solo aparece *Entrar en VR* y el panel lo indica.
+
+> Por qué antes se veía "mixto": en una sesión de realidad mixta el navegador
+> muestra la sala real en todo pixel sin geometría, aunque la escena tenga un
+> color de fondo. Ahora el fondo virtual es una esfera opaca que la tapa.
 
 - Delante tuyo, a unos 55 cm, está la **mesa** con el **brazo naranja y gris**
   y tres cubos.
@@ -143,6 +148,9 @@ mixta, entra en VR normal y el panel lo indica.
     velocidad; *Grabar punto*, *Reproducir*, *Abrir/Cerrar pinza*, tipo de
     punto (*articular* o *lineal*), *Grabar trayectoria*, *Ir a inicio*,
     *Borrar último* y *Bucle*.
+  - **Rutinas**: movimientos listos (*Saludar*, *Batir crema*, *Dibujar
+    círculo*, *Recoger y dejar*, *Limpiar la mesa*), ver la trayectoria y el
+    rastro de la punta, la escena del programa y *Grabar en tiempo real*.
   - **Programa**: la lista de puntos (6 por página). Al tocar uno se edita su
     velocidad, pausa y pinza, y se puede ir a él, reproducir desde ahí,
     cambiar su tipo, reemplazarlo por la pose actual, insertar uno después,
@@ -151,8 +159,9 @@ mixta, entra en VR normal y el panel lo indica.
     programas guardados en el visor (cargar o borrar) y los dos ejemplos.
   - **Objetos**: agregar cubos, cilindros, pelotas, bandejas y manchas al
     alcance del brazo, quitarlos y reiniciar la mesa.
-  - **Escena**: fondo virtual o sala real, mesa virtual, pantallas, fuente de
-    cada cámara, *Traer panel aquí*, panel de muñeca y *Ordenar todo*.
+  - **Escena**: fondo virtual o sala real, piso y mesa virtuales, pantallas,
+    fuente de cada cámara, *Traer panel aquí*, panel de muñeca y *Ordenar
+    todo*.
   - **Controles**: qué hace cada palanca y botón del control (ver abajo).
 - En el **control izquierdo** va un **panel rápido** (como un reloj): Grabar,
   Reproducir, Pinza, Guardar, Traer panel y Trayectoria. Se apunta con el
@@ -162,8 +171,10 @@ mixta, entra en VR normal y el panel lo indica.
 - **Gatillo** sobre un panel: pulsar botones y arrastrar deslizadores.
 - **Grip** (o gatillo) cerca de la esfera naranja de la punta, o apuntándola:
   el brazo sigue tu mano (cinemática inversa).
-- **Grip** apuntando a un objeto, al panel, a una pantalla o a la base del
-  brazo: lo mueves con la mano; la palanca adelante/atrás lo aleja o acerca.
+- **Grip** con la mano junto a un cubo (o apuntándolo): lo tomas y lo mueves;
+  al soltarlo cae. Lo mismo con el panel, una pantalla o la base del brazo.
+  Gana lo más cercano a la mano; la palanca adelante/atrás aleja o acerca lo
+  que sostienes.
   Los objetos caen al soltarlos; el panel, las pantallas y el brazo quedan
   donde los dejes (guardado).
 
@@ -183,7 +194,7 @@ mixta, entra en VR normal y el panel lo indica.
 | X | Reproducir / detener |
 | Y | Capa 2 (mantener) |
 | Clic palanca izquierda | Traer el panel frente a ti |
-| Clic palanca derecha | Detener |
+| Clic palanca derecha | Grabar en tiempo real / terminar |
 
 Todo se cambia en la pestaña **Controles** (cada fila pasa a la siguiente
 opción al tocarla): las palancas pueden mover cualquier articulación, la punta
@@ -199,10 +210,23 @@ visor.
 - **Limpiar la mesa**: agrega manchas (*Objetos → + 6 manchas*) y recorre la
   mesa con la punta a menos de 4 cm de altura. Ejemplo: *Archivos → Ejemplo:
   limpiar la mesa*, que barre la zona de trabajo en arcos.
-- **Grabar un movimiento**: *Grabar trayectoria*, mueve el brazo con la mano,
-  las palancas o los deslizadores, y vuelve a pulsar para terminar. Se guarda
-  un punto cada 0,2 s con su tiempo, y al reproducir se repite con el mismo
-  ritmo (sin pasar las velocidades máximas).
+- **Grabar en tiempo real**: pulsa *Grabar en tiempo real* (o clic en la
+  palanca derecha), toma la punta con el grip y mueve el brazo como quieras;
+  también sirven las palancas y los deslizadores. Vuelve a pulsar para
+  terminar. Se crea un programa nuevo ("Grabación N", el anterior queda
+  guardado) con un punto cada 0,1 s y su tiempo; al reproducir se repite con
+  el mismo ritmo (sin pasar las velocidades máximas).
+- **Movimientos de ejemplo**: *Saludar* (levanta el brazo y mueve la muñeca de
+  lado a lado), *Batir crema* (herramienta vertical, 4 vueltas de 3,5 cm a 3 cm
+  de la mesa) y *Dibujar círculo* (círculo vertical de 14 cm). Están en
+  [`js/generadores.js`](js/generadores.js): se pueden copiar para crear otros.
+- **Ver el movimiento**: la **trayectoria** (línea celeste con un punto blanco
+  por cada punto del programa) muestra por dónde pasará la punta; el
+  **rastro** (línea naranja) dibuja por dónde pasó.
+- **Mover cubos y repetir**: al grabar el primer punto se anota dónde están
+  los objetos (*escena del programa*). Al reproducir desde P1 se vuelven a
+  poner en su lugar, así un pick and place se puede repetir. *Fijar escena
+  actual* la vuelve a anotar y *Reponer objetos* los devuelve a mano.
 
 ## Cámaras
 
@@ -277,7 +301,10 @@ se ajusta a mano con J4–J6.
 - `velocidad`: % de la velocidad máxima para llegar a ese punto (5–100).
 - `pausa`: segundos de espera al llegar (después de mover la pinza).
 - `tiempo` (opcional): segundos para llegar desde el punto anterior; lo usan
-  las trayectorias grabadas, que se recorren a velocidad constante.
+  las grabaciones en tiempo real, que se recorren a velocidad constante.
+- `escena` (opcional, en el programa): objetos al empezar, con posición
+  relativa a la base del brazo, por ejemplo
+  `[{ "tipo": "cubo", "p": [-0.2, 0.02, 0.12], "ry": 0 }]`.
 
 En cada punto: primero el brazo llega, luego la pinza se ajusta y al final
 corre la pausa. La duración de cada tramo se calcula para que ninguna
@@ -302,6 +329,8 @@ js/fuentes.js            elección de la fuente de cada pantalla
 js/objetos.js            objetos (cubos, cilindros, pelotas, bandejas, manchas)
 js/mandos.js             palancas y botones del Quest asignables
 js/paneles.js            contenido del panel con pestañas y del de muñeca
+js/generadores.js        rutinas generadas (saludar, batir, círculo)
+js/trayectoria.js        trayectoria del programa y rastro de la punta
 js/disposicion.js        mover panel, pantallas y brazo; posiciones guardadas
 js/puntero-escritorio.js ratón sobre el panel 3D y la punta
 js/ui-escritorio.js      panel lateral HTML y teclado

@@ -27,7 +27,7 @@ export const OPCIONES_BOTON = [
   { id: 'pinza', nombre: 'Abrir/cerrar pinza' },
   { id: 'grabar', nombre: 'Grabar punto' },
   { id: 'reproducir', nombre: 'Reproducir/detener' },
-  { id: 'trayectoria', nombre: 'Grabar trayectoria' },
+  { id: 'trayectoria', nombre: 'Grabar en tiempo real' },
   { id: 'detener', nombre: 'Detener' },
   { id: 'inicio', nombre: 'Ir a inicio' },
   { id: 'guardar', nombre: 'Guardar programa' },
@@ -57,7 +57,7 @@ export const MAPA_INICIAL = {
     2: { 'izq.x': 'J6', 'izq.y': 'J5', 'der.x': 'nada', 'der.y': 'pinza' },
   },
   botones: {
-    A: 'pinza', B: 'grabar', X: 'reproducir', Y: 'capa', 'izq.clic': 'traerPanel', 'der.clic': 'detener',
+    A: 'pinza', B: 'grabar', X: 'reproducir', Y: 'capa', 'izq.clic': 'traerPanel', 'der.clic': 'trayectoria',
   },
 };
 

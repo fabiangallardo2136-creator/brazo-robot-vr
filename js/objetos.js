@@ -181,6 +181,40 @@ export function crearObjetos({ escena, brazo, mesa }) {
       const o = lista.find((x) => x.malla === hit.object || x.malla.getObjectById(hit.object.id));
       return o ? { o, distancia: hit.distance } : null;
     },
+    // Objeto más cercano a un punto (para tomarlo con la mano sin apuntar).
+    cercano(punto, radio = 0.06) {
+      let mejor = null;
+      for (const o of lista) {
+        if (o === sujeto || o.limpia) continue;
+        const d = o.malla.getWorldPosition(pTmp).distanceTo(punto);
+        if (d < radio + o.def.radio && (!mejor || d < mejor.d)) mejor = { o, d };
+      }
+      return mejor;
+    },
+    // Disposición de los objetos, relativa a la base del brazo, para guardarla
+    // en un programa y volver a armarla antes de reproducirlo.
+    capturar() {
+      brazo.raiz.updateMatrixWorld(true);
+      return lista.filter((o) => o !== sujeto && !o.limpia).map((o) => {
+        const p = brazo.raiz.worldToLocal(o.malla.getWorldPosition(new THREE.Vector3()));
+        const e = new THREE.Euler().setFromQuaternion(o.malla.quaternion, 'YXZ');
+        return { tipo: o.tipo, p: p.toArray().map((v) => Math.round(v * 10000) / 10000), ry: Math.round(e.y * 1000) / 1000 };
+      });
+    },
+    restaurar(items) {
+      api.quitarTodo();
+      brazo.raiz.updateMatrixWorld(true);
+      for (const it of items) {
+        if (!CATALOGO[it.tipo]) continue;
+        const p = brazo.raiz.localToWorld(new THREE.Vector3().fromArray(it.p));
+        const o = agregar(it.tipo, p);
+        if (!o.def.plana) {
+          o.malla.rotation.set(0, it.ry ?? 0, 0);
+          o.malla.position.y += 0.002;
+          o.estado = 'cayendo';
+        }
+      }
+    },
     tomarConMano(o) {
       o.estado = 'mano';
     },
@@ -197,7 +231,7 @@ export function crearObjetos({ escena, brazo, mesa }) {
       if (!sujeto && apertura < aperturaAnterior) {
         const o = lista.find((x) => x.def.tomable && x.estado !== 'mano'
           && apertura <= x.def.ancho + 0.002 && aperturaAnterior > x.def.ancho - 0.006
-          && x.malla.getWorldPosition(pTmp).distanceTo(pAgarre) < 0.025);
+          && x.malla.getWorldPosition(pTmp).distanceTo(pAgarre) < 0.035);
         if (o) {
           brazo.efector.attach(o.malla);
           o.estado = 'sujeto';

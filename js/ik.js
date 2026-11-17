@@ -16,9 +16,10 @@ const q = new THREE.Quaternion();
  * @param config   configuración del brazo (límites).
  * @param inicio   ángulos de partida en grados (normalmente el objetivo actual).
  * @param objetivo punto objetivo en coordenadas de la raíz del brazo.
+ * @param pesos    (opcional) peso de cada articulación; reemplaza a pesoIK.
  * @returns {{angulos: number[], error: number}} error en metros.
  */
-export function resolverIK(cadena, config, inicio, objetivo, { iteraciones = 15, tolerancia = 0.001 } = {}) {
+export function resolverIK(cadena, config, inicio, objetivo, { iteraciones = 15, tolerancia = 0.001, pesos } = {}) {
   const ang = inicio.slice();
   const art = config.articulaciones;
   const { juntas, efector } = cadena;
@@ -26,7 +27,7 @@ export function resolverIK(cadena, config, inicio, objetivo, { iteraciones = 15,
 
   for (let it = 0; it < iteraciones; it++) {
     for (let i = juntas.length - 1; i >= 0; i--) {
-      const peso = art[i].pesoIK ?? 1;
+      const peso = pesos ? pesos[i] : (art[i].pesoIK ?? 1);
       if (peso <= 0) continue;
       const junta = juntas[i];
       junta.getWorldPosition(pj);

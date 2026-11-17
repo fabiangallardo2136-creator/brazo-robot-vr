@@ -7,7 +7,7 @@ import { TIPOS, almacen } from './programa.js';
 import { ENTRADAS_EJE, ENTRADAS_BOTON } from './mandos.js';
 
 const PESTANAS = [
-  ['mover', 'Mover'], ['programa', 'Programa'], ['archivos', 'Archivos'],
+  ['mover', 'Mover'], ['programa', 'Programa'], ['rutinas', 'Rutinas'], ['archivos', 'Archivos'],
   ['objetos', 'Objetos'], ['escena', 'Escena'], ['controles', 'Controles'],
 ];
 
@@ -45,7 +45,7 @@ export function construirPanelPrincipal(panel, app) {
   });
 
   // Pestañas ----------------------------------------------------------------
-  const anchoP = (W - 5 * 8) / 6;
+  const anchoP = (W - (PESTANAS.length - 1) * 8) / PESTANAS.length;
   PESTANAS.forEach(([id, nombre], k) => panel.agregar({
     tipo: 'boton', x: M + k * (anchoP + 8), y: 18, w: anchoP, h: 64, tam: 28,
     texto: () => nombre, activo: () => pestana === id,
@@ -57,7 +57,7 @@ export function construirPanelPrincipal(panel, app) {
     texto: () => {
       const n = app.programa.puntos.length;
       let estado = `${app.programa.nombre} · ${n} punto${n === 1 ? '' : 's'}`;
-      if (app.grabandoTrayectoria) estado = `● Grabando trayectoria · ${n} puntos`;
+      if (app.grabandoTrayectoria) estado = `● GRABANDO en tiempo real · ${n} puntos`;
       else if (r.activo && r.programa === app.programa) {
         const fase = { moviendo: 'Hacia', pinza: 'Pinza en', esperando: 'Pausa en' }[r.fase] ?? '';
         estado = `▶ ${fase} P${r.indice + 1}/${n}${app.bucle ? ' · bucle' : ''}`;
@@ -127,7 +127,7 @@ export function construirPanelPrincipal(panel, app) {
       [() => (articular() ? 'Mando: ángulos' : 'Mando: X Y Z'), () => app.alternarModoMando(), { activo: cartesiano }],
       [() => (app.tipoGrabacion === 'lineal' ? 'Grabar: lineal' : 'Grabar: articular'),
         () => app.alternarTipoGrabacion(), { activo: () => app.tipoGrabacion === 'lineal' }],
-      [() => (app.grabandoTrayectoria ? '■ Fin trayectoria' : '● Grabar trayectoria'),
+      [() => (app.grabandoTrayectoria ? '■ Terminar grabación' : '● Grabar en tiempo real'),
         () => app.alternarTrayectoria(), { activo: () => app.grabandoTrayectoria }],
     ]);
     fila('mover', y, [
@@ -274,7 +274,7 @@ export function construirPanelPrincipal(panel, app) {
     y = fila('objetos', y, [
       ['Quitar todo', () => app.objetos.quitarTodo()],
       ['Reiniciar (3 cubos)', () => app.reiniciarCubos()],
-      [() => `Mesa virtual: ${app.entornoVisible?.() ? 'sí' : 'no'}`, () => app.alternarEntorno(), { activo: () => app.entornoVisible?.() }],
+      [() => `Mesa virtual: ${app.mesaVisible?.() ? 'sí' : 'no'}`, () => app.alternarMesa(), { activo: () => app.mesaVisible?.() }],
     ]);
     texto('objetos', M, y + 20, () => {
       const o = app.objetos;
@@ -298,10 +298,11 @@ export function construirPanelPrincipal(panel, app) {
     y = fila('escena', y, [
       [() => (app.fondoReal?.() ? 'Fondo: sala real' : 'Fondo: virtual'), () => app.alternarFondo?.(),
         { activo: () => !!app.fondoReal?.() }],
-      [() => `Mesa virtual: ${app.entornoVisible?.() ? 'sí' : 'no'}`, () => app.alternarEntorno(), { activo: () => app.entornoVisible?.() }],
-      [() => `Pantallas: ${app.camaras?.visibles ? 'sí' : 'no'}`, () => app.alternarPantallas?.(), { activo: () => !!app.camaras?.visibles }],
+      [() => `Piso virtual: ${app.pisoVisible?.() ? 'sí' : 'no'}`, () => app.alternarPiso(), { activo: () => app.pisoVisible?.() }],
+      [() => `Mesa virtual: ${app.mesaVisible?.() ? 'sí' : 'no'}`, () => app.alternarMesa(), { activo: () => app.mesaVisible?.() }],
     ]);
     y = fila('escena', y, [
+      [() => `Pantallas: ${app.camaras?.visibles ? 'sí' : 'no'}`, () => app.alternarPantallas?.(), { activo: () => !!app.camaras?.visibles }],
       [() => `Cám. pinza: ${app.nombreFuente?.(0) ?? '—'}`, () => app.ciclarFuente?.(0)],
       [() => `Cám. ambiente: ${app.nombreFuente?.(1) ?? '—'}`, () => app.ciclarFuente?.(1)],
     ]);
@@ -313,11 +314,53 @@ export function construirPanelPrincipal(panel, app) {
     ]);
     texto('escena', M, y + 20, () => (app.modoXR === 'vr'
       ? 'Este visor no permite ver la sala real desde el navegador (no hay sesión AR).'
-      : 'Fondo "sala real" muestra tu taller con las cámaras del Quest (passthrough).'));
-    texto('escena', M, y + 60, () => `Hardware: ${app.estadoDriver || '—'}`);
-    texto('escena', M, y + 100, () => `Última orden: ${app.driver?.ultimaTrama || '—'}`);
-    texto('escena', M, y + 160, 'Mover el panel, las pantallas o el brazo: apunta y mantén el grip.');
-    texto('escena', M, y + 200, 'Con la palanca adelante/atrás (mientras mantienes el grip) lo alejas o acercas.');
+      : 'Fondo virtual: todo es virtual. Fondo sala real: ves tu taller (passthrough).'));
+    texto('escena', M, y + 56, 'Con la sala real, el piso y la mesa virtuales empiezan ocultos; actívalos si los quieres.');
+    texto('escena', M, y + 100, () => `Hardware: ${app.estadoDriver || '—'}`);
+    texto('escena', M, y + 136, () => `Última orden: ${app.driver?.ultimaTrama || '—'}`);
+    texto('escena', M, y + 190, 'Mover el panel, las pantallas o el brazo: apunta y mantén el grip.');
+    texto('escena', M, y + 226, 'Con la palanca adelante/atrás (mientras mantienes el grip) lo alejas o acercas.');
+  }
+
+  // ============================ RUTINAS =======================================
+  {
+    let y = y0;
+    texto('rutinas', M, y + 6, 'Movimientos listos (reemplazan el programa; el anterior queda guardado):');
+    y += 26;
+    y = fila('rutinas', y, [
+      ['Saludar', () => app.generarRutina('saludar')],
+      ['Batir crema', () => app.generarRutina('batir')],
+      ['Dibujar círculo', () => app.generarRutina('circulo')],
+    ]);
+    y = fila('rutinas', y, [
+      ['Recoger y dejar', () => app.cargarDesdeURL('ejemplos/recoger-y-dejar.json')],
+      ['Limpiar la mesa', () => app.cargarDesdeURL('ejemplos/limpiar-mesa.json')],
+      [() => (r.activo ? '■ Detener' : '▶ Reproducir'), () => app.alternarReproduccion(), { activo: () => r.activo }],
+    ]);
+    texto('rutinas', M, y + 8, 'Ver el movimiento:');
+    y += 26;
+    y = fila('rutinas', y, [
+      [() => `Trayectoria: ${app.trayectoria?.verCamino ? 'sí' : 'no'}`, () => app.trayectoria.alternarCamino(),
+        { activo: () => !!app.trayectoria?.verCamino }],
+      [() => `Rastro de la punta: ${app.trayectoria?.verRastro ? 'sí' : 'no'}`, () => app.trayectoria.alternarRastro(),
+        { activo: () => !!app.trayectoria?.verRastro }],
+      ['Borrar rastro', () => app.trayectoria.borrarRastro()],
+    ]);
+    texto('rutinas', M, y + 8, () => `Objetos al empezar el programa: ${app.programa.escena
+      ? `${app.programa.escena.length} guardados (se reponen al reproducir desde P1)` : 'no guardados'}`);
+    y += 26;
+    y = fila('rutinas', y, [
+      ['Fijar escena actual', () => app.capturarEscena()],
+      ['Reponer objetos', () => app.restaurarEscena()],
+      ['Quitar escena', () => app.quitarEscena()],
+    ]);
+    y = fila('rutinas', y, [
+      [() => (app.grabandoTrayectoria ? '■ Terminar grabación' : '● Grabar en tiempo real'),
+        () => app.alternarTrayectoria(), { activo: () => app.grabandoTrayectoria }],
+    ], { cols: 1 });
+    texto('rutinas', M, y + 14, 'Grabar en tiempo real: toma la punta con el grip o usa las palancas.');
+    texto('rutinas', M, y + 48, 'Cada movimiento queda grabado con su ritmo en un programa nuevo.');
+    texto('rutinas', M, y + 82, 'Clic en la palanca derecha = empezar / terminar la grabación.');
   }
 
   // ============================ CONTROLES =====================================
@@ -371,7 +414,7 @@ export function construirPanelMuneca(panel, app) {
     [() => (app.pinzaAbierta() ? 'Cerrar pinza' : 'Abrir pinza'), () => app.alternarPinza()],
     ['Guardar', () => app.guardar()],
     ['Traer panel', () => app.traerPanel?.()],
-    [() => (app.grabandoTrayectoria ? '■ Trayectoria' : '● Trayectoria'), () => app.alternarTrayectoria(), () => app.grabandoTrayectoria],
+    [() => (app.grabandoTrayectoria ? '■ Terminar' : '● Grabar mov.'), () => app.alternarTrayectoria(), () => app.grabandoTrayectoria],
   ];
   botones.forEach(([t, accion, activo], k) => panel.agregar({
     tipo: 'boton', x: M + (k % 2) * (w + 14), y: 64 + Math.floor(k / 2) * 76, w, h: 64, tam: 28,
