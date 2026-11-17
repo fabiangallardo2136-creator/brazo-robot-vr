@@ -1,0 +1,17 @@
+{
+  "formato": "brazo-robot-vr/programa",
+  "version": 1,
+  "nombre": "Recoger y dejar (ejemplo)",
+  "brazo": "Brazo 6 GDL de escritorio (genérico)",
+  "articulaciones": ["J1", "J2", "J3", "J4", "J5", "J6"],
+  "puntos": [
+    { "angulos": [0, 15, 75, 0, 70, 0], "velocidad": 100, "pausa": 0.3 },
+    { "angulos": [-25, 30, 85, 0, 60, 0], "velocidad": 80, "pausa": 0 },
+    { "angulos": [-25, 48, 88, 0, 42, 0], "velocidad": 40, "pausa": 0.8 },
+    { "angulos": [-25, 25, 80, 0, 70, 0], "velocidad": 60, "pausa": 0 },
+    { "angulos": [25, 25, 80, 0, 70, 90], "velocidad": 100, "pausa": 0 },
+    { "angulos": [25, 48, 88, 0, 42, 90], "velocidad": 40, "pausa": 0.8 },
+    { "angulos": [25, 25, 80, 0, 70, 0], "velocidad": 60, "pausa": 0 },
+    { "angulos": [0, 15, 75, 0, 70, 0], "velocidad": 100, "pausa": 1 }
+  ]
+}

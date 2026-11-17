@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Brazo robot VR</title>
+  <meta name="description" content="Simulador y programador de un brazo robótico de 6 GDL con WebXR (Meta Quest 2).">
+  <link rel="stylesheet" href="css/estilos.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <main id="escena">
+    <header class="barra">
+      <div>
+        <h1>Brazo robot VR</h1>
+        <p class="ayuda">Arrastra la esfera naranja para mover la punta · 1–6 elige articulación · ← → la mueven (Shift = 10°) · R graba punto · Espacio reproduce</p>
+      </div>
+      <button id="boton-vr" class="vr" disabled>Comprobando VR…</button>
+    </header>
+    <div id="mensaje" role="status" aria-live="polite"></div>
+    <noscript>Esta aplicación necesita JavaScript.</noscript>
+  </main>
+  <aside id="lateral" aria-label="Controles"></aside>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

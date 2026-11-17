@@ -1,0 +1,7 @@
+# Certificados locales para HTTPS: nunca al repositorio
+*.pem
+*.key
+*.crt
+__pycache__/
+.DS_Store
+Thumbs.db
