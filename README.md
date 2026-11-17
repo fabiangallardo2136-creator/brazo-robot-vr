@@ -135,6 +135,35 @@ autofirmado. Los archivos `.pem` están en `.gitignore`.
   de alambre donde está el objetivo. El control vibra al agarrar.
 - Flujo típico: mueve el brazo, *Grabar punto*, repite, y *Reproducir*.
   Arriba a la derecha del panel se lee hacia qué punto va.
+- A tu **derecha** hay dos **pantallas**: arriba la *Cámara pinza* (lo que ve
+  una cámara montada en la pinza, se mueve con el brazo) y abajo la *Cámara
+  ambiente* (una cámara en un trípode detrás de la mesa, a la izquierda).
+  La tercera fila de botones del panel las oculta (*Pantallas*) y cambia la
+  fuente de cada una (*Pinza*, *Amb.*).
+
+## Cámaras
+
+Hoy cada pantalla puede mostrar:
+
+- **Simulada**: lo que vería una cámara en esa posición (se configura en
+  `camaras` de `js/config-brazo.js`).
+- **Webcam de este equipo**: en el PC, botón "Buscar webcams" en la sección
+  Cámaras. Sirve para probar una cámara real en la pantalla virtual. El Quest
+  no ofrece webcams al navegador.
+- **Apagada**.
+
+Por dentro, cualquier video que llegue como `MediaStream` se puede mostrar con
+`app.camaras.fijarStream(indice, stream, 'Nombre')` (ver
+[`js/camaras.js`](js/camaras.js)). Así, la transmisión desde el brazo real
+solo tiene que entregar un `MediaStream`.
+
+### Transmitir las cámaras reales al Quest (versión 2, por decidir)
+
+| Camino | Cómo | A favor | En contra |
+|---|---|---|---|
+| **Webcams USB en un PC + WebRTC** | Las cámaras (una mini USB en la pinza y otra en el espacio) van a un PC. Una página "emisora" las captura y las envía por WebRTC a la app del Quest | Buena calidad, baja latencia, funciona con HTTPS (GitHub Pages) | Cable USB por el brazo; necesita un servicio de "señalización" para conectar los dos navegadores (uno público gratuito o uno propio en el PC) |
+| **ESP32-CAM / XIAO ESP32-S3 Sense en la pinza** | La cámara Wi-Fi sirve video MJPEG por HTTP | Liviana, inalámbrica, barata | Una página HTTPS no puede mostrar `http://`: hace falta un puente en el PC o servir la app por `adb reverse`; calidad y cuadros por segundo menores |
+| **Celular como cámara** | Un celular viejo abre la página emisora y transmite por WebRTC | No hay que comprar nada | Sirve para la cámara del espacio, no para la pinza |
 
 Los programas guardados en el Quest quedan en el almacenamiento de su
 navegador, separados de los del PC. Para pasarlos de uno a otro usa
@@ -196,6 +225,8 @@ js/programa.js           programas, reproductor, localStorage, JSON
 js/app.js                estado y acciones compartidas
 js/panel-vr.js           panel flotante (canvas) para VR y ratón
 js/vr.js                 botón "Entrar en VR", controles, agarre
+js/camaras.js            cámaras simuladas, pantallas y webcams
+js/fuentes.js            elección de la fuente de cada pantalla
 js/puntero-escritorio.js ratón sobre el panel 3D y la punta
 js/ui-escritorio.js      panel lateral HTML y teclado
 js/drivers/              simulador + esqueletos USB y Wi-Fi (versión 2)

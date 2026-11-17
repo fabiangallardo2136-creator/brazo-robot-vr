@@ -178,7 +178,33 @@ export function crearUIEscritorio(raiz, app, { alMostrarPanel3D }) {
     h('label', { class: 'check' }, verPanel, ' Mostrar el panel VR también en escritorio'),
   );
 
-  raiz.append(secArticulaciones, secPrograma, secArchivos, secHardware);
+  // ---------------------------------------------------------------- Cámaras
+  const selFuentes = app.camaras.pantallas.map((p, i) => h('select', {
+    'aria-label': `Fuente de ${p.titulo}`,
+    onchange: (e) => app.fijarFuente(i, e.target.value),
+  }));
+  const verPantallas = h('input', { type: 'checkbox', checked: true, onchange: () => app.alternarPantallas() });
+  function dibujarCamaras() {
+    const ops = app.opcionesFuente();
+    selFuentes.forEach((s, i) => {
+      s.replaceChildren(...ops.map((o) => h('option', { value: o.id }, o.nombre)));
+      s.value = app.fuentes[i];
+    });
+    verPantallas.checked = app.camaras.visibles;
+  }
+  const secCamaras = h('section', {},
+    h('h2', {}, 'Cámaras'),
+    ...app.camaras.pantallas.map((p, i) => h('div', { class: 'botones' },
+      h('span', { class: 'etiqueta-fuente' }, p.titulo), selFuentes[i])),
+    h('div', { class: 'botones' },
+      h('button', { onclick: () => app.buscarWebcams() }, 'Buscar webcams de este equipo')),
+    h('label', { class: 'check' }, verPantallas, ' Mostrar las pantallas en la escena'),
+    h('div', { class: 'dato' }, 'Simulada = lo que vería una cámara en esa posición. La transmisión desde el brazo real queda para la versión 2.'),
+  );
+  dibujarCamaras();
+  app.alCambiar((t) => { if (t === 'camaras') dibujarCamaras(); });
+
+  raiz.append(secArticulaciones, secPrograma, secCamaras, secArchivos, secHardware);
 
   // ---------------------------------------------------------------- Eventos
   const mensaje = document.getElementById('mensaje');

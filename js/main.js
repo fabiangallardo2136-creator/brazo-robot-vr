@@ -9,6 +9,8 @@ import { PanelVR, construirPanelPrincipal } from './panel-vr.js';
 import { configurarBotonVR, configurarVR } from './vr.js';
 import { configurarPunteroEscritorio } from './puntero-escritorio.js';
 import { crearUIEscritorio } from './ui-escritorio.js';
+import { crearCamaras } from './camaras.js';
+import { agregarFuentes } from './fuentes.js';
 
 const contenedor = document.getElementById('escena');
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -28,6 +30,10 @@ escena.add(brazo.raiz);
 
 const app = crearApp(BRAZO, brazo);
 window.app = app; // útil para depurar desde la consola
+
+// Cámaras (pinza y ambiente) y sus pantallas
+const camaras = crearCamaras({ renderer, escena, brazo, config: BRAZO });
+agregarFuentes(app, camaras);
 
 // Marcador del objetivo de la cinemática inversa
 const marcador = new THREE.Mesh(
@@ -51,6 +57,7 @@ const orbita = new OrbitControls(camara, renderer.domElement);
 orbita.target.copy(objetivoCamara);
 orbita.enableDamping = true;
 orbita.update();
+window.depurar = { renderer, escena, camara, orbita }; // para la consola
 
 const puntero = configurarPunteroEscritorio({ renderer, camara, app, panel, brazo, orbita });
 const vr = configurarVR({ renderer, escena, app, panel, brazo });
@@ -117,6 +124,7 @@ renderer.setAnimationLoop(() => {
   posLocal.copy(posMundo);
   brazo.raiz.worldToLocal(posLocal);
 
+  camaras.actualizar();
   panel.actualizar(ahora);
   ui.actualizar(ahora, posMundo, posLocal);
   if (!renderer.xr.isPresenting) orbita.update();

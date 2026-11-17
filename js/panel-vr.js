@@ -16,7 +16,7 @@ const COLOR = {
 };
 
 export class PanelVR {
-  constructor({ ancho = 1024, alto = 880, anchoMetros = 0.62 } = {}) {
+  constructor({ ancho = 1024, alto = 980, anchoMetros = 0.62 } = {}) {
     this.ancho = ancho;
     this.alto = alto;
     this.canvas = document.createElement('canvas');
@@ -292,6 +292,16 @@ export function construirPanelPrincipal(panel, app) {
     { texto: () => `↻ Bucle: ${app.bucle ? 'sí' : 'no'}`, activo: () => app.bucle, accion: () => app.alternarBucle() },
     { texto: () => 'Ir a inicio', accion: () => app.irAInicio() },
     { texto: () => 'Guardar', accion: () => app.guardar() },
+  ]);
+  const corto = (t) => (t.length > 11 ? `${t.slice(0, 10)}…` : t);
+  fila([
+    {
+      texto: () => `Pantallas: ${app.camaras?.visibles ? 'sí' : 'no'}`,
+      activo: () => !!app.camaras?.visibles,
+      accion: () => app.alternarPantallas?.(),
+    },
+    { texto: () => `Pinza: ${corto(app.nombreFuente?.(0) ?? '—')}`, accion: () => app.ciclarFuente?.(0) },
+    { texto: () => `Amb.: ${corto(app.nombreFuente?.(1) ?? '—')}`, accion: () => app.ciclarFuente?.(1) },
   ]);
   panel.agregar({
     tipo: 'texto', x: M, y: y + 14, tam: 26, color: COLOR.tenue,

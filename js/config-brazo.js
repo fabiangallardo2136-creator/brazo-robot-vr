@@ -78,6 +78,16 @@ export const BRAZO = {
   // Dónde se apoya la base en la escena (sobre la mesa virtual).
   ubicacion: { posicion: [0, 0.75, -0.55], giroY: 0 },
 
+  // Cámaras. En el simulador son cámaras virtuales; cada pantalla puede
+  // mostrar en su lugar una webcam o, en la versión 2, un video transmitido.
+  camaras: {
+    // Montada en la pinza. posicion: medida desde el punto de trabajo de la
+    // herramienta (metros). Mira a lo largo de los dedos.
+    pinza: { posicion: [0, -0.045, 0.03], fov: 70 },
+    // Fija en el espacio (coordenadas del mundo, metros).
+    ambiente: { posicion: [-0.4, 1.3, -1.0], mirarA: [0, 0.9, -0.5], fov: 55 },
+  },
+
   colores: {
     eslabon: 0xe8772e,  // naranjo
     motor: 0x2b2f36,    // gris oscuro

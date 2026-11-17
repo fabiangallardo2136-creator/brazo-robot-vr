@@ -55,7 +55,7 @@ export function crearEscena(config) {
   });
 
   const camara = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.01, 50);
-  camara.position.set(bx + 0.2, 1.4, bz + 1.15);
+  camara.position.set(bx, 1.45, bz + 1.55);
 
-  return { escena, camara, objetivoCamara: new THREE.Vector3(bx - 0.25, by + 0.25, bz) };
+  return { escena, camara, objetivoCamara: new THREE.Vector3(bx, by + 0.3, bz) };
 }
