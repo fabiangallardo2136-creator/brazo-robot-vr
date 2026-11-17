@@ -110,6 +110,7 @@ export function crearUIEscritorio(raiz, app, { alMostrarPanel3D }) {
   const lista = h('ol', { class: 'puntos' });
   const botonPlay = h('button', { class: 'primario', onclick: () => app.alternarReproduccion() }, '▶ Reproducir');
   const bucle = h('input', { type: 'checkbox', onchange: () => app.alternarBucle() });
+  const botonTrayectoria = h('button', { onclick: () => app.alternarTrayectoria() }, '● Grabar trayectoria (T)');
   const tipoGrab = h('select', {
     'aria-label': 'Tipo de movimiento de los puntos nuevos',
     onchange: (e) => { if (e.target.value !== app.tipoGrabacion) app.alternarTipoGrabacion(); },
@@ -125,7 +126,8 @@ export function crearUIEscritorio(raiz, app, { alMostrarPanel3D }) {
       lista.append(h('li', { 'data-i': i },
         h('div', { class: 'p-cab' },
           h('strong', {}, `P${i + 1}`),
-          h('span', { class: 'angulos' }, p.angulos.map((v) => Math.round(v)).join(' · '))),
+          h('span', { class: 'angulos' }, p.angulos.map((v) => Math.round(v)).join(' · ')
+            + (p.tiempo ? ` · ${p.tiempo.toFixed(2)} s` : ''))),
         h('div', { class: 'p-ctl' },
           h('select', {
             class: 'chico', title: 'Tipo de movimiento hacia este punto',
@@ -171,6 +173,7 @@ export function crearUIEscritorio(raiz, app, { alMostrarPanel3D }) {
     h('div', { class: 'botones' },
       h('button', { class: 'primario', onclick: () => app.grabarPunto() }, '● Grabar punto (R)'),
       botonPlay),
+    h('div', { class: 'botones' }, botonTrayectoria),
     h('div', { class: 'botones' },
       h('span', { class: 'etiqueta-fuente' }, 'Grabar puntos como'), tipoGrab),
     h('label', { class: 'check' }, bucle, ' Repetir en bucle'),
@@ -232,6 +235,7 @@ export function crearUIEscritorio(raiz, app, { alMostrarPanel3D }) {
   }));
   const verPantallas = h('input', { type: 'checkbox', checked: true, onchange: () => app.alternarPantallas() });
   const verEntorno = h('input', { type: 'checkbox', checked: true, onchange: () => app.alternarEntorno() });
+  const estadoObjetos = h('div', { class: 'dato' });
   function dibujarCamaras() {
     const ops = app.opcionesFuente();
     selFuentes.forEach((s, i) => {
@@ -247,9 +251,15 @@ export function crearUIEscritorio(raiz, app, { alMostrarPanel3D }) {
     h('div', { class: 'botones' },
       h('button', { onclick: () => app.buscarWebcams() }, 'Buscar webcams de este equipo')),
     h('label', { class: 'check' }, verPantallas, ' Mostrar las pantallas en la escena'),
-    h('label', { class: 'check' }, verEntorno, ' Mostrar piso, mesa y cubos'),
+    h('label', { class: 'check' }, verEntorno, ' Mostrar piso y mesa virtual'),
+    h('div', { class: 'subtitulo' }, 'Objetos para manipular'),
     h('div', { class: 'botones' },
-      h('button', { onclick: () => app.reiniciarCubos() }, 'Reiniciar cubos'),
+      ...['cubo', 'cilindro', 'pelota', 'bandeja'].map((t) => h('button', { onclick: () => app.objetos.agregar(t) }, `+ ${t}`)),
+      h('button', { onclick: () => app.objetos.agregarManchas(6) }, '+ manchas')),
+    estadoObjetos,
+    h('div', { class: 'botones' },
+      h('button', { onclick: () => app.objetos.quitarTodo() }, 'Quitar todo'),
+      h('button', { onclick: () => app.reiniciarCubos() }, 'Reiniciar (3 cubos)'),
       h('button', { onclick: () => app.restablecerPosiciones() }, 'Ordenar panel y pantallas')),
     h('div', { class: 'dato' }, 'Simulada = lo que vería una cámara en esa posición. La transmisión desde el brazo real queda para la versión 2.'),
   );
@@ -257,7 +267,11 @@ export function crearUIEscritorio(raiz, app, { alMostrarPanel3D }) {
   app.alCambiar((t) => {
     if (t === 'camaras') dibujarCamaras();
     if (t === 'entorno') verEntorno.checked = app.entornoVisible();
-    if (t === 'modo') tipoGrab.value = app.tipoGrabacion;
+    if (t === 'modo') {
+      tipoGrab.value = app.tipoGrabacion;
+      botonTrayectoria.textContent = app.grabandoTrayectoria ? '■ Terminar trayectoria (T)' : '● Grabar trayectoria (T)';
+      botonTrayectoria.classList.toggle('peligro', app.grabandoTrayectoria);
+    }
   });
 
   raiz.append(secArticulaciones, secPrograma, secCamaras, secArchivos, secHardware);
@@ -297,6 +311,7 @@ export function crearUIEscritorio(raiz, app, { alMostrarPanel3D }) {
     else if ((e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') && t.type !== 'range') app.sumarArticulacion(app.seleccion, -paso);
     else if (e.key === 'r' || e.key === 'R') app.grabarPunto();
     else if (e.key === 'g' || e.key === 'G') app.alternarPinza();
+    else if (e.key === 't' || e.key === 'T') app.alternarTrayectoria();
     else if (e.key === ' ') app.alternarReproduccion();
     else if (e.key === 'h' || e.key === 'H') app.irAInicio();
     else if (e.key === 'Escape') app.detenerTodo();
@@ -318,6 +333,10 @@ export function crearUIEscritorio(raiz, app, { alMostrarPanel3D }) {
         f.real.classList.toggle('moviendo', enMov);
       });
       pinzaReal.textContent = `${(c.pinzaActual * 1000).toFixed(0)} mm`;
+      const ob = app.objetos;
+      estadoObjetos.textContent = `Objetos: ${ob.lista.filter((x) => !x.def.plana).length}`
+        + (ob.manchas.total ? ` · manchas limpias ${ob.manchas.limpias} de ${ob.manchas.total}` : '')
+        + (ob.sujeto ? ` · en la pinza: ${ob.sujeto.def.nombre}` : '');
       if (document.activeElement !== pinzaRango) pinzaRango.value = c.pinzaObjetivo * 1000;
       botonPinza.textContent = app.pinzaAbierta() ? 'Cerrar pinza (G)' : 'Abrir pinza (G)';
       const obj = app.puntaObjetivoMM();

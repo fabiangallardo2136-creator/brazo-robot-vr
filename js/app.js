@@ -38,6 +38,8 @@ export function crearApp(config, brazoVisual) {
     seleccion: 0,
     modoMando: 'articular',      // 'articular' | 'cartesiano' (deslizadores del panel VR)
     tipoGrabacion: 'articular',  // tipo de movimiento de los puntos nuevos
+    puntoSel: -1,                // punto elegido para editar en el panel VR
+    grabandoTrayectoria: false,  // grabación continua de movimientos
     objetivoIK: null,  // THREE.Vector3 (mundo) mientras se arrastra el efector
     errorIK: 0,
     driver: null,
@@ -97,6 +99,10 @@ export function crearApp(config, brazoVisual) {
       const abierta = controlador.pinzaObjetivo > (pz.aperturaMin + pz.aperturaMax) / 2;
       app.fijarPinzaMM((abierta ? pz.aperturaMin : pz.aperturaMax) * 1000);
       app.informar(abierta ? 'Cerrando pinza' : 'Abriendo pinza');
+    },
+    sumarPinzaMM(delta) {
+      reproductor.detener();
+      controlador.fijarPinza(controlador.pinzaObjetivo + delta / 1000);
     },
     pinzaAbierta() {
       return controlador.pinzaObjetivo > (pz.aperturaMin + pz.aperturaMax) / 2;
@@ -172,6 +178,7 @@ export function crearApp(config, brazoVisual) {
     borrarPunto(i) {
       reproductor.detener();
       app.programa.puntos.splice(i, 1);
+      if (app.puntoSel >= app.programa.puntos.length) app.puntoSel = app.programa.puntos.length - 1;
       app.guardarCambios();
       app.informar(`P${i + 1} borrado`);
     },
@@ -223,6 +230,61 @@ export function crearApp(config, brazoVisual) {
       app.guardarCambios();
     },
 
+    // --- Selección y edición de puntos (panel VR) ---------------------------
+    seleccionarPunto(i) {
+      app.puntoSel = i >= 0 && i < app.programa.puntos.length ? i : -1;
+      app.avisar('seleccionPunto');
+    },
+    alternarTipoPunto(i) {
+      const p = app.programa.puntos[i];
+      if (p) app.editarPunto(i, 'tipo', p.tipo === 'lineal' ? 'articular' : 'lineal');
+    },
+    insertarPuntoDespues(i) {
+      const n = nuevoPunto(controlador.objetivo, controlador.pinzaObjetivo, app.tipoGrabacion);
+      app.programa.puntos.splice(i + 1, 0, n);
+      app.puntoSel = i + 1;
+      app.guardarCambios();
+      app.informar(`Punto insertado como P${i + 2}`);
+    },
+
+    // --- Grabación continua (trayectoria) -------------------------------------
+    // Mientras está activa, cada 0,2 s que el brazo se haya movido se guarda un
+    // punto con el tiempo transcurrido, para repetir el movimiento tal cual.
+    alternarTrayectoria() {
+      if (app.grabandoTrayectoria) {
+        app.grabandoTrayectoria = false;
+        app.informar(`Trayectoria grabada: ${app._muestras} puntos`);
+      } else {
+        reproductor.detener();
+        app.grabandoTrayectoria = true;
+        app._muestras = 0;
+        app._tMuestra = 0;
+        app._ultimaMuestra = null;
+        app.informar('Grabando trayectoria: mueve el brazo; pulsa de nuevo para terminar');
+      }
+      app.avisar('modo');
+    },
+    actualizarGrabacion(dt) {
+      if (!app.grabandoTrayectoria) return;
+      app._tMuestra += dt;
+      if (app._tMuestra < 0.2) return;
+      const ang = controlador.objetivo;
+      const pinza = controlador.pinzaObjetivo;
+      const u = app._ultimaMuestra;
+      const cambio = !u || u.pinza !== pinza || ang.some((v, i) => Math.abs(v - u.ang[i]) > 0.5);
+      if (!cambio) {
+        // Quieto: el tiempo sigue corriendo para respetar las pausas (máx. 5 s).
+        app._tMuestra = Math.min(app._tMuestra, 5);
+        return;
+      }
+      const tiempo = u ? app._tMuestra : undefined;
+      app.programa.puntos.push(nuevoPunto(ang, pinza, 'articular', tiempo));
+      app._ultimaMuestra = { ang: ang.slice(), pinza };
+      app._tMuestra = 0;
+      app._muestras++;
+      app.guardarCambios();
+    },
+
     // --- Archivos ----------------------------------------------------------
     nuevo() {
       reproductor.detener();
@@ -237,6 +299,24 @@ export function crearApp(config, brazoVisual) {
       if (almacen.guardar(app.programa)) app.informar(`"${app.programa.nombre}" guardado en este navegador`);
       else app.informar('No se pudo guardar (¿almacenamiento bloqueado?)');
       app.avisar('archivos');
+    },
+    guardarComoNuevo() {
+      let n = 1;
+      const existentes = new Set(almacen.listar());
+      const base = app.programa.nombre.replace(/ \(\d+\)$/, '');
+      while (existentes.has(`${base} (${n})`)) n++;
+      app.programa.nombre = `${base} (${n})`;
+      app.guardarCambios();
+      app.guardar();
+    },
+    async cargarDesdeURL(url) {
+      try {
+        const r = await fetch(new URL(url, location.href));
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        app.importar(await r.text());
+      } catch (e) {
+        app.informar(`No se pudo cargar ${url}: ${e.message}`);
+      }
     },
     cargar(nombre) {
       const p = almacen.cargar(nombre, config);

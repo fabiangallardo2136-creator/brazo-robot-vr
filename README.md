@@ -14,8 +14,11 @@ Con la app puedes:
 - **Programarlo**: grabar poses como puntos (con la apertura de la pinza y el
   tipo de movimiento: articular o lineal), ordenarlos, editarlos o borrarlos,
   y guardar o cargar programas (en el navegador o como archivo JSON).
-- **Verlo junto al brazo real** en modo mixto (passthrough), con el panel, las
-  pantallas y el brazo virtual movibles a donde te acomode.
+- **Verlo junto al brazo real** con fondo de sala real (passthrough), con el
+  panel, las pantallas y el brazo virtual movibles a donde te acomode.
+- **Manejarlo con los controles del Quest**: palancas y botones asignables.
+- **Practicar rutinas** con objetos (cubos, cilindros, pelotas, bandejas y
+  manchas para limpiar) y grabar trayectorias.
 - **Simularlo**: reproducir el programa en tiempo real respetando los límites
   de cada articulación y su velocidad máxima, con los ángulos a la vista.
 
@@ -24,8 +27,9 @@ orden pasa por un "driver" intercambiable (hoy el simulador; después USB o
 Wi-Fi hacia un ESP32/Arduino).
 
 > **Estado:** la versión de escritorio está probada y la VR básica se probó en
-> el Quest 2. El modo mixto, mover objetos con el grip, la pinza y el mando
-> cartesiano en VR todavía no se han probado en el visor.
+> el Quest 2. El panel con pestañas, el panel de muñeca, los controles
+> asignables, el fondo de sala real y los objetos todavía no se han probado en
+> el visor.
 
 ## Probar en el PC
 
@@ -49,6 +53,7 @@ Controles en escritorio:
 | Mover la punta (IK) | Arrastrar la esfera naranja de la pinza |
 | Mover la punta en X / Y / Z | Botones −10, −1, +1, +10 (mm) o escribir la coordenada |
 | Abrir / cerrar la pinza | `G`, botón o deslizador de la pinza |
+| Grabar trayectoria | `T` (otra vez para terminar) |
 | Grabar punto | `R` o "Grabar punto" |
 | Reproducir / detener | `Espacio` |
 | Ir a la pose de inicio | `H` |
@@ -125,43 +130,79 @@ autofirmado. Los archivos `.pem` están en `.gitignore`.
 
 ## Qué se ve y cómo se usa en VR
 
-- Hay dos botones: **Entrar en VR** (todo virtual) y **Modo mixto
-  (passthrough)**, que muestra tu sala real a través de las cámaras del Quest
-  (en el Quest 2, en blanco y negro) con el brazo virtual encima. En modo mixto
-  la mesa, el piso y los cubos virtuales empiezan ocultos; el botón *Mesa
-  virtual* del panel los muestra.
-- Estás de pie frente a una **mesa de madera** con una cuadrícula de 5 cm, a
-  unos 55 cm delante tuyo. Sobre ella está el **brazo naranja y gris** con una
-  pinza y tres cubos de 4 cm (azul, verde y amarillo).
-- A tu **izquierda**, a la altura del pecho y girado hacia ti, flota el
-  **panel**:
-  - Deslizadores J1 a J6 (con el ángulo real a la derecha y un triángulo azul
-    que marca dónde va el brazo). Con *Mando: X Y Z* los tres primeros pasan a
-    ser la posición de la punta en milímetros.
-  - Deslizadores de pinza (mm) y velocidad.
-  - Botones: *Grabar punto*, *Reproducir/Detener*, *Borrar último*;
-    *Abrir/Cerrar pinza*, *Mando*, *Grabar: articular/lineal*; *Bucle*,
-    *Ir a inicio*, *Guardar*; *Pantallas* y fuente de cada cámara;
-    *Mesa virtual*, *Reiniciar cubos* y *Ordenar todo*.
-- **Mover cosas**: apunta al panel, a una pantalla o a la base del brazo y
-  mantén el **grip**. El objeto sigue al control (el rayo se pone amarillo);
-  con la palanca hacia adelante o atrás lo alejas o acercas. Al soltar, la
-  posición queda guardada. *Ordenar todo* devuelve todo a su lugar original.
-- Cada control emite un **rayo** celeste. Apunta al panel y usa el
-  **gatillo** para pulsar botones o arrastrar deslizadores.
-- Para mover la punta: acerca la mano a la **esfera naranja** de la pinza (o
-  apúntala con el rayo) y mantén el **grip** (botón lateral) o el gatillo. El
-  brazo sigue a tu mano con su velocidad máxima; aparece una esfera celeste
-  de alambre donde está el objetivo. El control vibra al agarrar.
-- Flujo típico: mueve el brazo, ajusta la pinza, *Grabar punto*, repite, y
-  *Reproducir*. Arriba a la derecha del panel se lee hacia qué punto va.
-- Prueba el ejemplo con `?programa=ejemplos/recoger-y-dejar.json`: toma el
-  cubo azul y lo deja más adelante, a la derecha.
-- A tu **derecha** hay dos **pantallas**: arriba la *Cámara pinza* (lo que ve
-  una cámara montada en la pinza, se mueve con el brazo) y abajo la *Cámara
-  ambiente* (una cámara en un trípode detrás de la mesa, a la izquierda).
-  La tercera fila de botones del panel las oculta (*Pantallas*) y cambia la
-  fuente de cada una (*Pinza*, *Amb.*).
+Pulsa **Entrar al visor**. Si el Quest lo permite, la app entra en una sesión
+de realidad mixta con **fondo virtual** (se ve igual que VR) y desde el panel
+(*Escena → Fondo*) pasas a ver **tu sala real** (passthrough; en el Quest 2 en
+blanco y negro) sin salir del visor. Si el navegador no permite realidad
+mixta, entra en VR normal y el panel lo indica.
+
+- Delante tuyo, a unos 55 cm, está la **mesa** con el **brazo naranja y gris**
+  y tres cubos.
+- A tu **izquierda** flota el **panel principal**, con pestañas:
+  - **Mover**: deslizadores J1–J6 (o X/Y/Z de la punta con *Mando*), pinza y
+    velocidad; *Grabar punto*, *Reproducir*, *Abrir/Cerrar pinza*, tipo de
+    punto (*articular* o *lineal*), *Grabar trayectoria*, *Ir a inicio*,
+    *Borrar último* y *Bucle*.
+  - **Programa**: la lista de puntos (6 por página). Al tocar uno se edita su
+    velocidad, pausa y pinza, y se puede ir a él, reproducir desde ahí,
+    cambiar su tipo, reemplazarlo por la pose actual, insertar uno después,
+    subirlo, bajarlo o borrarlo.
+  - **Archivos**: guardar, guardar como nuevo, programa nuevo, la lista de
+    programas guardados en el visor (cargar o borrar) y los dos ejemplos.
+  - **Objetos**: agregar cubos, cilindros, pelotas, bandejas y manchas al
+    alcance del brazo, quitarlos y reiniciar la mesa.
+  - **Escena**: fondo virtual o sala real, mesa virtual, pantallas, fuente de
+    cada cámara, *Traer panel aquí*, panel de muñeca y *Ordenar todo*.
+  - **Controles**: qué hace cada palanca y botón del control (ver abajo).
+- En el **control izquierdo** va un **panel rápido** (como un reloj): Grabar,
+  Reproducir, Pinza, Guardar, Traer panel y Trayectoria. Se apunta con el
+  rayo del control derecho.
+- A tu **derecha** están las **pantallas** de las cámaras de la pinza y del
+  ambiente.
+- **Gatillo** sobre un panel: pulsar botones y arrastrar deslizadores.
+- **Grip** (o gatillo) cerca de la esfera naranja de la punta, o apuntándola:
+  el brazo sigue tu mano (cinemática inversa).
+- **Grip** apuntando a un objeto, al panel, a una pantalla o a la base del
+  brazo: lo mueves con la mano; la palanca adelante/atrás lo aleja o acerca.
+  Los objetos caen al soltarlos; el panel, las pantallas y el brazo quedan
+  donde los dejes (guardado).
+
+### Controles del Quest (por defecto)
+
+| Control | Capa 1 | Con Y apretado (capa 2) |
+|---|---|---|
+| Palanca izquierda ←→ | J1 Base | J6 Giro herramienta |
+| Palanca izquierda ↑↓ | J2 Hombro | J5 Flexión muñeca |
+| Palanca derecha ←→ | J4 Giro muñeca | — |
+| Palanca derecha ↑↓ | J3 Codo | Pinza |
+
+| Botón | Acción |
+|---|---|
+| A | Abrir / cerrar pinza |
+| B | Grabar punto |
+| X | Reproducir / detener |
+| Y | Capa 2 (mantener) |
+| Clic palanca izquierda | Traer el panel frente a ti |
+| Clic palanca derecha | Detener |
+
+Todo se cambia en la pestaña **Controles** (cada fila pasa a la siguiente
+opción al tocarla): las palancas pueden mover cualquier articulación, la punta
+en X/Y/Z o la pinza, y los botones cualquier acción. Queda guardado en el
+visor.
+
+### Rutinas típicas
+
+- **Pick and place**: punto arriba del objeto (articular), punto abajo
+  (lineal, velocidad baja), mismo punto con la pinza cerrada, arriba
+  (lineal), sobre el destino, abajo, abrir, arriba. Ejemplo: *Archivos →
+  Ejemplo: recoger y dejar*.
+- **Limpiar la mesa**: agrega manchas (*Objetos → + 6 manchas*) y recorre la
+  mesa con la punta a menos de 4 cm de altura. Ejemplo: *Archivos → Ejemplo:
+  limpiar la mesa*, que barre la zona de trabajo en arcos.
+- **Grabar un movimiento**: *Grabar trayectoria*, mueve el brazo con la mano,
+  las palancas o los deslizadores, y vuelve a pulsar para terminar. Se guarda
+  un punto cada 0,2 s con su tiempo, y al reproducir se repite con el mismo
+  ritmo (sin pasar las velocidades máximas).
 
 ## Cámaras
 
@@ -235,6 +276,8 @@ se ajusta a mano con J4–J6.
   recta, útil para bajar a tomar una pieza).
 - `velocidad`: % de la velocidad máxima para llegar a ese punto (5–100).
 - `pausa`: segundos de espera al llegar (después de mover la pinza).
+- `tiempo` (opcional): segundos para llegar desde el punto anterior; lo usan
+  las trayectorias grabadas, que se recorren a velocidad constante.
 
 En cada punto: primero el brazo llega, luego la pinza se ajusta y al final
 corre la pausa. La duración de cada tramo se calcula para que ninguna
@@ -252,11 +295,13 @@ js/ik.js                 cinemática inversa CCD
 js/controlador.js        ángulos objetivo/real con límite de velocidad
 js/programa.js           programas, reproductor, localStorage, JSON
 js/app.js                estado y acciones compartidas
-js/panel-vr.js           panel flotante (canvas) para VR y ratón
-js/vr.js                 botones VR y modo mixto, controles, agarre
+js/panel-vr.js           panel flotante (canvas) para VR y ratón: dibujo y toques
+js/vr.js                 entrada al visor, rayos, agarre y mover objetos
 js/camaras.js            cámaras simuladas, pantallas y webcams
 js/fuentes.js            elección de la fuente de cada pantalla
-js/objetos.js            cubos que la pinza toma y suelta
+js/objetos.js            objetos (cubos, cilindros, pelotas, bandejas, manchas)
+js/mandos.js             palancas y botones del Quest asignables
+js/paneles.js            contenido del panel con pestañas y del de muñeca
 js/disposicion.js        mover panel, pantallas y brazo; posiciones guardadas
 js/puntero-escritorio.js ratón sobre el panel 3D y la punta
 js/ui-escritorio.js      panel lateral HTML y teclado
@@ -300,7 +345,10 @@ Puntos a decidir antes de implementarla:
 - Sin detección de colisiones (el brazo puede atravesar la mesa y los cubos).
 - La IK solo controla la posición de la punta; la orientación de la pinza se
   ajusta con J4–J6.
-- Los cubos se toman cuando la pinza se cierra a su ancho (4 cm) con el cubo
-  entre los dedos; la "física" es solo una caída vertical al soltarlos.
+- Los objetos se toman cuando la pinza se cierra a su ancho con el objeto
+  entre los dedos; la "física" es solo una caída vertical al soltarlos (se
+  apoyan en la mesa, en el plano del brazo, sobre otro objeto o en el piso).
+- En el visor no hay teclado: los programas nuevos se nombran solos
+  ("Programa 2", "… (1)"); para renombrarlos, usa el PC.
 - Mover objetos solo se puede en VR (en el PC la cámara se mueve con el ratón).
 - Necesita internet para descargar Three.js desde el CDN.

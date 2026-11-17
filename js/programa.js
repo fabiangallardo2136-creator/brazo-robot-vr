@@ -16,6 +16,9 @@
 //       una curva) o "lineal" (la punta va en línea recta).
 // velocidad: % de la velocidad máxima para llegar a ese punto.
 // pausa: segundos de espera al llegar.
+// tiempo (opcional): segundos exactos para llegar desde el punto anterior.
+//       Lo usan las trayectorias grabadas en continuo; el tramo se recorre a
+//       velocidad constante para que el movimiento salga fluido.
 // Los programas de la versión 1 (sin pinza ni tipo) se siguen pudiendo abrir.
 
 import * as THREE from 'three';
@@ -39,14 +42,16 @@ export function nuevoPrograma(nombre, config) {
   };
 }
 
-export function nuevoPunto(angulos, aperturaM, tipo = 'articular') {
-  return {
+export function nuevoPunto(angulos, aperturaM, tipo = 'articular', tiempo) {
+  const p = {
     angulos: angulos.map((v) => Math.round(v * 10) / 10),
     pinza: Math.round(aperturaM * 10000) / 10,
     tipo,
     velocidad: 100,
     pausa: 0,
   };
+  if (tiempo !== undefined) p.tiempo = Math.round(tiempo * 1000) / 1000;
+  return p;
 }
 
 // Valida y limpia un programa leído de un archivo o de localStorage.
@@ -61,13 +66,16 @@ export function normalizarPrograma(datos, config) {
     if (!Array.isArray(ang) || ang.length !== art.length || ang.some((v) => !Number.isFinite(Number(v)))) {
       throw new Error(`El punto ${i + 1} no tiene ${art.length} ángulos numéricos.`);
     }
-    return {
+    const punto = {
       angulos: ang.map((v, j) => limitarNum(v, art[j].min, art[j].max, 0)),
       pinza: limitarNum(p?.pinza, pz.aperturaMin * 1000, pz.aperturaMax * 1000, pz.inicial * 1000),
       tipo: p?.tipo === 'lineal' ? 'lineal' : 'articular',
       velocidad: limitarNum(p?.velocidad, 5, 100, 100),
       pausa: limitarNum(p?.pausa, 0, 60, 0),
     };
+    const t = limitarNum(p?.tiempo, 0.02, 60, undefined);
+    if (t !== undefined) punto.tiempo = t;
+    return punto;
   });
   const prog = nuevoPrograma(String(datos.nombre || 'Programa importado').slice(0, 60), config);
   prog.puntos = puntos;
@@ -201,7 +209,15 @@ export class Reproductor {
       const velLin = (this.config.velLineal ?? 0.15) * this.c.velocidad * fraccion;
       dur = Math.max(dur, this.p0.distanceTo(this.p1) / velLin);
     }
-    this.duracion = Math.max(0.05, dur * 1.5);
+    if (p.tiempo) {
+      // Trayectoria grabada: tiempo fijo y velocidad constante (sin pasar los límites).
+      this.constante = true;
+      this.duracion = Math.max(p.tiempo / fraccion, dur);
+      if (p.pinza !== undefined) this.c.fijarPinza(p.pinza / 1000);
+    } else {
+      this.constante = false;
+      this.duracion = Math.max(0.05, dur * 1.5);
+    }
     this.t = 0;
     this.fase = 'moviendo';
     this.alCambiar?.();
@@ -212,7 +228,7 @@ export class Reproductor {
     if (this.fase === 'moviendo') {
       this.t += dt;
       const s = Math.min(1, this.t / this.duracion);
-      const e = s * s * (3 - 2 * s);
+      const e = this.constante ? s : s * s * (3 - 2 * s);
       const semilla = this.desde.map((v, j) => v + (this.hacia[j] - v) * e);
       if (this.tipo === 'lineal' && s < 1) {
         this._p.lerpVectors(this.p0, this.p1, e);
@@ -220,14 +236,14 @@ export class Reproductor {
       } else {
         this.c.fijarObjetivos(semilla);
       }
-      if (s >= 1 && this.c.llego(this.hacia)) {
+      if (s >= 1 && this.c.llego(this.hacia, this.constante ? 2 : 0.3)) {
         const pz = this.programa.puntos[this.indice].pinza;
         if (pz !== undefined) this.c.fijarPinza(pz / 1000);
         this.fase = 'pinza';
         this.alCambiar?.();
       }
     } else if (this.fase === 'pinza') {
-      if (this.c.pinzaLlego()) {
+      if (this.constante || this.c.pinzaLlego()) {
         this.fase = 'esperando';
         this.espera = this.programa.puntos[this.indice].pausa ?? 0;
         this.alCambiar?.();

@@ -1,5 +1,5 @@
-// Escena: luces, piso, mesa, cubos y cámara de escritorio. Liviana para el
-// Quest 2 (sin sombras dinámicas). El "entorno" (piso, mesa y cubos) se puede
+// Escena: luces, piso, mesa y cámara de escritorio. Liviana para el
+// Quest 2 (sin sombras dinámicas). El "entorno" (piso y mesa) se puede
 // ocultar, por ejemplo en modo mixto para ver la sala real.
 import * as THREE from 'three';
 
@@ -50,19 +50,6 @@ export function crearEscena(config) {
   mesa.position.set(bx, 0, bz);
   entorno.add(mesa);
 
-  // Cubos de 4 cm que la pinza puede tomar
-  const colores = [0x3fa9f5, 0x6cc070, 0xf2c14e];
-  const cubos = [[-0.2, 0.12], [0.2, 0.12], [0.0, 0.2]].map(([dx, dz], i) => {
-    const cubo = new THREE.Mesh(
-      new THREE.BoxGeometry(0.04, 0.04, 0.04),
-      new THREE.MeshStandardMaterial({ color: colores[i], roughness: 0.5 }),
-    );
-    cubo.position.set(bx + dx, by + 0.02, bz + dz);
-    cubo.name = `cubo${i + 1}`;
-    entorno.add(cubo);
-    return cubo;
-  });
-
   const camara = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.01, 50);
   camara.position.set(bx, 1.45, bz + 1.55);
 
@@ -76,7 +63,6 @@ export function crearEscena(config) {
     escena,
     camara,
     entorno,
-    cubos,
     mesa: {
       get visible() { return entorno.visible; },
       centro: new THREE.Vector3(bx, by, bz),

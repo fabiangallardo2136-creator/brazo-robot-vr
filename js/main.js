@@ -5,17 +5,19 @@ import { BRAZO } from './config-brazo.js';
 import { crearEscena } from './escena.js';
 import { crearBrazoVisual } from './brazo.js';
 import { crearApp } from './app.js';
-import { PanelVR, construirPanelPrincipal } from './panel-vr.js';
-import { configurarBotonesXR, configurarVR } from './vr.js';
+import { PanelVR } from './panel-vr.js';
+import { construirPanelPrincipal, construirPanelMuneca } from './paneles.js';
+import { configurarBotonXR, configurarVR } from './vr.js';
 import { configurarPunteroEscritorio } from './puntero-escritorio.js';
 import { crearUIEscritorio } from './ui-escritorio.js';
 import { crearCamaras } from './camaras.js';
 import { agregarFuentes } from './fuentes.js';
-import { crearManipulacion } from './objetos.js';
+import { crearObjetos } from './objetos.js';
 import { crearDisposicion } from './disposicion.js';
+import { crearMandos } from './mandos.js';
 
 const contenedor = document.getElementById('escena');
-// alpha: true para que el modo mixto (passthrough) deje ver la sala real.
+// alpha: true para que el fondo "sala real" (passthrough) deje ver el taller.
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(contenedor.clientWidth, contenedor.clientHeight);
@@ -23,7 +25,7 @@ renderer.xr.enabled = true;
 renderer.xr.setReferenceSpaceType('local-floor');
 contenedor.append(renderer.domElement);
 
-const { escena, camara, objetivoCamara, entorno, cubos, mesa, modoMixto } = crearEscena(BRAZO);
+const { escena, camara, objetivoCamara, entorno, mesa, modoMixto } = crearEscena(BRAZO);
 
 // Brazo sobre la mesa
 const brazo = crearBrazoVisual(BRAZO);
@@ -38,16 +40,35 @@ window.app = app; // útil para depurar desde la consola
 const camaras = crearCamaras({ renderer, escena, brazo, config: BRAZO });
 agregarFuentes(app, camaras);
 
-// Cubos que la pinza puede tomar
-const manipulacion = crearManipulacion({ contenedor: entorno, brazo, cubos, mesa });
+// Objetos para manipular (empieza con 3 cubos en la mesa)
+const objetos = crearObjetos({ escena, brazo, mesa });
+objetos.reiniciar();
+app.objetos = objetos;
 app.reiniciarCubos = () => {
-  manipulacion.reiniciar();
-  app.informar('Cubos de vuelta en la mesa');
+  objetos.reiniciar();
+  app.informar('Mesa reiniciada con 3 cubos');
 };
 app.entornoVisible = () => entorno.visible;
 app.alternarEntorno = () => {
   entorno.visible = !entorno.visible;
   app.avisar('entorno');
+};
+
+// Fondo: virtual o sala real (solo dentro de una sesión AR del visor).
+let fondoReal = false;
+app.fondoReal = () => (app.modoXR === 'mixto' ? fondoReal : app.modoXR === 'vr' ? undefined : false);
+app.alternarFondo = () => {
+  if (app.modoXR !== 'mixto') {
+    app.informar(app.modoXR === 'vr'
+      ? 'Este visor no permite ver la sala real desde el navegador'
+      : 'El fondo de sala real se activa dentro del visor');
+    return;
+  }
+  fondoReal = !fondoReal;
+  modoMixto(fondoReal);
+  entorno.visible = !fondoReal;
+  app.avisar('entorno');
+  app.informar(fondoReal ? 'Fondo: tu sala real' : 'Fondo: virtual');
 };
 
 // Marcador del objetivo de la cinemática inversa
@@ -58,13 +79,27 @@ const marcador = new THREE.Mesh(
 marcador.visible = false;
 escena.add(marcador);
 
-// Panel flotante (a la izquierda del brazo, girado hacia el usuario)
-const panel = new PanelVR();
+// Mando directo con palancas y botones (se configura en la pestaña Controles)
+const mandos = crearMandos(app, { alTraerPanel: () => app.traerPanel() });
+app.mandos = mandos;
+
+// Panel principal (a la izquierda del brazo, girado hacia el usuario)
+const panel = new PanelVR({ ancho: 1024, alto: 990, anchoMetros: 0.62 });
 construirPanelPrincipal(panel, app);
 const [bx, by, bz] = BRAZO.ubicacion.posicion;
 panel.malla.position.set(bx - 0.62, by + 0.5, bz + 0.12);
 panel.malla.rotation.y = 0.55;
 escena.add(panel.malla);
+
+// Panel rápido de muñeca (se pega al control izquierdo al conectarse)
+const panelMuneca = new PanelVR({ ancho: 512, alto: 300, anchoMetros: 0.17 });
+construirPanelMuneca(panelMuneca, app);
+panelMuneca.malla.position.set(0, 0.06, 0.05);
+panelMuneca.malla.rotation.x = -Math.PI / 3;
+app.panelMunecaVisible = () => panelMuneca.malla.visible;
+app.alternarPanelMuneca = () => {
+  panelMuneca.malla.visible = !panelMuneca.malla.visible;
+};
 
 // Objetos que se pueden mover en VR con el grip, y su posición guardada
 const disposicion = crearDisposicion();
@@ -77,16 +112,36 @@ app.restablecerPosiciones = () => {
   app.informar('Panel, pantallas y brazo en su lugar original');
 };
 
+// Trae el panel principal frente a la cabeza.
+const pCabeza = new THREE.Vector3();
+const dCabeza = new THREE.Vector3();
+app.traerPanel = () => {
+  const cam = renderer.xr.isPresenting ? renderer.xr.getCamera() : camara;
+  cam.getWorldPosition(pCabeza);
+  cam.getWorldDirection(dCabeza);
+  dCabeza.y = 0;
+  if (dCabeza.lengthSq() < 1e-6) dCabeza.set(0, 0, -1);
+  dCabeza.normalize();
+  panel.malla.position.copy(pCabeza).addScaledVector(dCabeza, 0.6);
+  panel.malla.position.y = pCabeza.y - 0.15;
+  panel.malla.rotation.set(0, Math.atan2(-dCabeza.x, -dCabeza.z), 0);
+  panel.malla.visible = true;
+  disposicion.guardar();
+  app.informar('Panel frente a ti');
+};
+
 // Controles de cámara (escritorio)
 camara.lookAt(objetivoCamara);
 const orbita = new OrbitControls(camara, renderer.domElement);
 orbita.target.copy(objetivoCamara);
 orbita.enableDamping = true;
 orbita.update();
-window.depurar = { renderer, escena, camara, orbita, disposicion, manipulacion }; // para la consola
+window.depurar = { renderer, escena, camara, orbita, disposicion, objetos, mandos, panel, panelMuneca }; // para la consola
 
 const puntero = configurarPunteroEscritorio({ renderer, camara, app, panel, brazo, orbita });
-const vr = configurarVR({ renderer, escena, app, panel, brazo, disposicion });
+const vr = configurarVR({
+  renderer, escena, app, paneles: [panel, panelMuneca], brazo, disposicion, objetos, mandos, panelMuneca,
+});
 
 const ui = crearUIEscritorio(document.getElementById('lateral'), app, {
   alMostrarPanel3D: (v) => {
@@ -94,31 +149,29 @@ const ui = crearUIEscritorio(document.getElementById('lateral'), app, {
   },
 });
 
-// Entrar y salir de VR / modo mixto
+// Entrar y salir del visor
 let panelEnEscritorio = true;
-let entornoAntes = true;
-configurarBotonesXR(renderer, {
-  botonVR: document.getElementById('boton-vr'),
-  botonAR: document.getElementById('boton-ar'),
-}, app, (modo) => {
+configurarBotonXR(renderer, document.getElementById('boton-vr'), app, (modo) => {
   if (modo) {
     panelEnEscritorio = panel.malla.visible;
     panel.malla.visible = true;
     document.body.classList.add('en-vr');
-    if (modo === 'mixto') {
-      // Se ve la sala real; la mesa virtual empieza oculta (se activa en el panel).
-      entornoAntes = entorno.visible;
-      entorno.visible = false;
-      modoMixto(true);
-      renderer.setClearColor(0x000000, 0);
-    }
+    // En sesión AR se empieza con fondo virtual (se ve igual que VR) y el
+    // panel permite pasar a la sala real.
+    renderer.setClearColor(0x000000, 0);
+    fondoReal = false;
+    modoMixto(false);
     app.modoXR = modo;
+    app.informar(modo === 'mixto'
+      ? 'Escena → "Fondo" para ver tu sala real'
+      : 'Este visor no permite ver la sala real desde el navegador');
   } else {
     panel.malla.visible = panelEnEscritorio;
     document.body.classList.remove('en-vr');
-    if (app.modoXR === 'mixto') {
-      entorno.visible = entornoAntes;
+    if (fondoReal) {
+      fondoReal = false;
       modoMixto(false);
+      entorno.visible = true;
     }
     app.modoXR = null;
   }
@@ -129,14 +182,8 @@ app.usarDriver('simulador');
 app.seleccionar(0);
 
 // ?programa=ejemplos/recoger-y-dejar.json carga un programa al abrir
-// (práctico en el Quest, donde importar archivos es incómodo).
 const urlPrograma = new URLSearchParams(location.search).get('programa');
-if (urlPrograma) {
-  fetch(new URL(urlPrograma, location.href))
-    .then((r) => (r.ok ? r.text() : Promise.reject(new Error(`HTTP ${r.status}`))))
-    .then((t) => app.importar(t))
-    .catch((e) => app.informar(`No se pudo cargar ${urlPrograma}: ${e.message}`));
-}
+if (urlPrograma) app.cargarDesdeURL(urlPrograma);
 
 // Ajuste de tamaño
 const redimensionar = () => {
@@ -160,9 +207,10 @@ renderer.setAnimationLoop(() => {
   const resaltarVR = vr.actualizar(dt);
   app.reproductor.actualizar(dt);
   app.controlador.actualizar(dt);
+  app.actualizarGrabacion(dt);
   brazo.fijarAngulos(app.controlador.actual);
-  manipulacion.actualizar(dt, app.controlador.pinzaActual);
-  brazo.fijarPinza(manipulacion.aperturaVisible(app.controlador.pinzaActual));
+  objetos.actualizar(dt, app.controlador.pinzaActual);
+  brazo.fijarPinza(objetos.aperturaVisible(app.controlador.pinzaActual));
   brazo.resaltarAsa(resaltarVR || puntero.resaltado());
 
   marcador.visible = !!app.objetivoIK;
@@ -174,6 +222,7 @@ renderer.setAnimationLoop(() => {
 
   camaras.actualizar();
   panel.actualizar(ahora);
+  if (renderer.xr.isPresenting) panelMuneca.actualizar(ahora);
   ui.actualizar(ahora, posMundo, posLocal);
   if (!renderer.xr.isPresenting) orbita.update();
   renderer.render(escena, camara);
