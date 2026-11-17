@@ -7,11 +7,15 @@ para probarlo sin visor.
 
 Con la app puedes:
 
-- **Mover** el brazo articulación por articulación (deslizadores) o agarrando
-  la punta (esfera naranja) y arrastrándola: la cinemática inversa calcula
-  los ángulos.
-- **Programarlo**: grabar poses como puntos, ordenarlos, editarlos o borrarlos,
+- **Mover** el brazo articulación por articulación, moviendo la punta en X, Y
+  y Z (cinemática inversa), o agarrando la punta (esfera naranja) y
+  arrastrándola.
+- **Abrir y cerrar la pinza** y tomar los cubos de la mesa.
+- **Programarlo**: grabar poses como puntos (con la apertura de la pinza y el
+  tipo de movimiento: articular o lineal), ordenarlos, editarlos o borrarlos,
   y guardar o cargar programas (en el navegador o como archivo JSON).
+- **Verlo junto al brazo real** en modo mixto (passthrough), con el panel, las
+  pantallas y el brazo virtual movibles a donde te acomode.
 - **Simularlo**: reproducir el programa en tiempo real respetando los límites
   de cada articulación y su velocidad máxima, con los ángulos a la vista.
 
@@ -19,9 +23,9 @@ Está pensada para que en una **versión 2** se conecte al brazo real: toda
 orden pasa por un "driver" intercambiable (hoy el simulador; después USB o
 Wi-Fi hacia un ESP32/Arduino).
 
-> **Estado:** la versión de escritorio está probada (deslizadores, arrastre de
-> la punta, grabar, reproducir, guardar, importar). **La parte de VR no se ha
-> probado todavía en un Quest.**
+> **Estado:** la versión de escritorio está probada y la VR básica se probó en
+> el Quest 2. El modo mixto, mover objetos con el grip, la pinza y el mando
+> cartesiano en VR todavía no se han probado en el visor.
 
 ## Probar en el PC
 
@@ -43,6 +47,8 @@ Controles en escritorio:
 | Girar / acercar la cámara | Arrastrar con el botón izquierdo / rueda. Botón derecho desplaza |
 | Mover una articulación | Deslizadores del panel derecho, o teclas `1`–`6` para elegir y `←` `→` (o `A` `D`) para mover; con `Shift` el paso es de 10° |
 | Mover la punta (IK) | Arrastrar la esfera naranja de la pinza |
+| Mover la punta en X / Y / Z | Botones −10, −1, +1, +10 (mm) o escribir la coordenada |
+| Abrir / cerrar la pinza | `G`, botón o deslizador de la pinza |
 | Grabar punto | `R` o "Grabar punto" |
 | Reproducir / detener | `Espacio` |
 | Ir a la pose de inicio | `H` |
@@ -119,22 +125,38 @@ autofirmado. Los archivos `.pem` están en `.gitignore`.
 
 ## Qué se ve y cómo se usa en VR
 
+- Hay dos botones: **Entrar en VR** (todo virtual) y **Modo mixto
+  (passthrough)**, que muestra tu sala real a través de las cámaras del Quest
+  (en el Quest 2, en blanco y negro) con el brazo virtual encima. En modo mixto
+  la mesa, el piso y los cubos virtuales empiezan ocultos; el botón *Mesa
+  virtual* del panel los muestra.
 - Estás de pie frente a una **mesa de madera** con una cuadrícula de 5 cm, a
   unos 55 cm delante tuyo. Sobre ella está el **brazo naranja y gris** con una
-  pinza, un cubo azul y uno verde como referencia.
+  pinza y tres cubos de 4 cm (azul, verde y amarillo).
 - A tu **izquierda**, a la altura del pecho y girado hacia ti, flota el
-  **panel**: 6 deslizadores (J1 a J6, con el ángulo real a la derecha y un
-  triángulo azul que marca dónde va el brazo), uno de velocidad y los botones
-  *Grabar punto*, *Reproducir/Detener*, *Borrar último*, *Bucle*,
-  *Ir a inicio* y *Guardar*.
+  **panel**:
+  - Deslizadores J1 a J6 (con el ángulo real a la derecha y un triángulo azul
+    que marca dónde va el brazo). Con *Mando: X Y Z* los tres primeros pasan a
+    ser la posición de la punta en milímetros.
+  - Deslizadores de pinza (mm) y velocidad.
+  - Botones: *Grabar punto*, *Reproducir/Detener*, *Borrar último*;
+    *Abrir/Cerrar pinza*, *Mando*, *Grabar: articular/lineal*; *Bucle*,
+    *Ir a inicio*, *Guardar*; *Pantallas* y fuente de cada cámara;
+    *Mesa virtual*, *Reiniciar cubos* y *Ordenar todo*.
+- **Mover cosas**: apunta al panel, a una pantalla o a la base del brazo y
+  mantén el **grip**. El objeto sigue al control (el rayo se pone amarillo);
+  con la palanca hacia adelante o atrás lo alejas o acercas. Al soltar, la
+  posición queda guardada. *Ordenar todo* devuelve todo a su lugar original.
 - Cada control emite un **rayo** celeste. Apunta al panel y usa el
   **gatillo** para pulsar botones o arrastrar deslizadores.
 - Para mover la punta: acerca la mano a la **esfera naranja** de la pinza (o
   apúntala con el rayo) y mantén el **grip** (botón lateral) o el gatillo. El
   brazo sigue a tu mano con su velocidad máxima; aparece una esfera celeste
   de alambre donde está el objetivo. El control vibra al agarrar.
-- Flujo típico: mueve el brazo, *Grabar punto*, repite, y *Reproducir*.
-  Arriba a la derecha del panel se lee hacia qué punto va.
+- Flujo típico: mueve el brazo, ajusta la pinza, *Grabar punto*, repite, y
+  *Reproducir*. Arriba a la derecha del panel se lee hacia qué punto va.
+- Prueba el ejemplo con `?programa=ejemplos/recoger-y-dejar.json`: toma el
+  cubo azul y lo deja más adelante, a la derecha.
 - A tu **derecha** hay dos **pantallas**: arriba la *Cámara pinza* (lo que ve
   una cámara montada en la pinza, se mueve con el brazo) y abajo la *Cámara
   ambiente* (una cámara en un trípode detrás de la mesa, a la izquierda).
@@ -184,6 +206,8 @@ Todo el brazo se define en [`js/config-brazo.js`](js/config-brazo.js):
   defecto los giros de muñeca y herramienta no participan).
 - `servo`: canal, ángulo de centro y sentido para traducir a la orden del
   servo (para la versión 2).
+- `herramienta.pinza`: apertura mínima y máxima, velocidad y servo de la pinza.
+- `velLineal`: velocidad máxima de la punta en movimientos lineales.
 
 La cinemática inversa (CCD, en [`js/ik.js`](js/ik.js)) solo busca la
 **posición** de la punta, no su orientación: la orientación de la herramienta
@@ -194,23 +218,28 @@ se ajusta a mano con J4–J6.
 ```json
 {
   "formato": "brazo-robot-vr/programa",
-  "version": 1,
+  "version": 2,
   "nombre": "Recoger y dejar",
   "brazo": "Brazo 6 GDL de escritorio (genérico)",
   "articulaciones": ["J1", "J2", "J3", "J4", "J5", "J6"],
   "puntos": [
-    { "angulos": [0, 15, 75, 0, 70, 0], "velocidad": 100, "pausa": 0.5 }
+    { "angulos": [0, 15, 75, 0, 70, 0], "pinza": 50, "tipo": "articular", "velocidad": 100, "pausa": 0.5 }
   ]
 }
 ```
 
 - `angulos`: grados, en el orden J1…J6. Al importar se recortan a los límites.
+- `pinza`: apertura en mm que la pinza toma **al llegar** al punto.
+- `tipo`: `articular` (cada articulación va directo a su ángulo; la punta
+  describe una curva, es lo más rápido) o `lineal` (la punta va en línea
+  recta, útil para bajar a tomar una pieza).
 - `velocidad`: % de la velocidad máxima para llegar a ese punto (5–100).
-- `pausa`: segundos de espera al llegar.
+- `pausa`: segundos de espera al llegar (después de mover la pinza).
 
-Entre puntos se interpola en espacio articular con una curva suave; la
-duración de cada tramo se calcula para que ninguna articulación pase su
-`velMax`.
+En cada punto: primero el brazo llega, luego la pinza se ajusta y al final
+corre la pausa. La duración de cada tramo se calcula para que ninguna
+articulación pase su `velMax` ni la punta su `velLineal`. Los programas de la
+versión 1 (sin `pinza` ni `tipo`) se siguen abriendo.
 
 ## Estructura
 
@@ -224,9 +253,11 @@ js/controlador.js        ángulos objetivo/real con límite de velocidad
 js/programa.js           programas, reproductor, localStorage, JSON
 js/app.js                estado y acciones compartidas
 js/panel-vr.js           panel flotante (canvas) para VR y ratón
-js/vr.js                 botón "Entrar en VR", controles, agarre
+js/vr.js                 botones VR y modo mixto, controles, agarre
 js/camaras.js            cámaras simuladas, pantallas y webcams
 js/fuentes.js            elección de la fuente de cada pantalla
+js/objetos.js            cubos que la pinza toma y suelta
+js/disposicion.js        mover panel, pantallas y brazo; posiciones guardadas
 js/puntero-escritorio.js ratón sobre el panel 3D y la punta
 js/ui-escritorio.js      panel lateral HTML y teclado
 js/drivers/              simulador + esqueletos USB y Wi-Fi (versión 2)
@@ -239,14 +270,15 @@ En la consola del navegador, `window.app` da acceso al estado para depurar.
 ## Versión 2: conectar el brazo real
 
 La app ya envía los ángulos reales ~25 veces por segundo al driver activo
-(`enviarAngulos(angulos)`). La trama propuesta está en
+(`enviarAngulos(angulos, pinza)`). La trama propuesta está en
 [`js/drivers/protocolo.js`](js/drivers/protocolo.js):
 
 ```
-S,90.0,105.0,165.0,90.0,160.0,90.0
+S,90.0,105.0,165.0,90.0,160.0,90.0,40.0
 ```
 
-(ángulo de cada servo, 0–180°, ordenado por canal). En "Hardware" se ve la
+(ángulo de cada servo, 0–180°, ordenado por canal; el último es el servo de la
+pinza). En "Hardware" se ve la
 última trama que se mandaría. Los drivers USB y Wi-Fi son esqueletos sin
 implementar.
 
@@ -265,6 +297,10 @@ Puntos a decidir antes de implementarla:
 
 ## Limitaciones conocidas
 
-- Sin detección de colisiones (el brazo puede atravesar la mesa).
-- La IK solo controla la posición de la punta.
+- Sin detección de colisiones (el brazo puede atravesar la mesa y los cubos).
+- La IK solo controla la posición de la punta; la orientación de la pinza se
+  ajusta con J4–J6.
+- Los cubos se toman cuando la pinza se cierra a su ancho (4 cm) con el cubo
+  entre los dedos; la "física" es solo una caída vertical al soltarlos.
+- Mover objetos solo se puede en VR (en el PC la cámara se mueve con el ratón).
 - Necesita internet para descargar Three.js desde el CDN.

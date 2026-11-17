@@ -9,18 +9,35 @@ import { crearDriver } from './drivers/index.js';
 
 export function crearApp(config, brazoVisual) {
   const controlador = new Controlador(config);
-  const reproductor = new Reproductor(controlador);
   const cadenaIK = crearCadena(config);
+  const pFK = new THREE.Vector3();
+
+  // Cinemática directa e inversa en coordenadas de la base del brazo.
+  const cinematica = {
+    fk(angulos) {
+      cadenaIK.fijarAngulos(angulos);
+      return cadenaIK.efector.getWorldPosition(pFK);
+    },
+    ik(semilla, objetivoLocal, opciones) {
+      return resolverIK(cadenaIK, config, semilla, objetivoLocal, opciones).angulos;
+    },
+  };
+
+  const reproductor = new Reproductor(controlador, config, cinematica);
   const oyentes = new Set();
+  const pz = config.herramienta.pinza;
 
   const app = {
     config,
     controlador,
     reproductor,
     brazoVisual,
+    cinematica,
     programa: almacen.cargarActual(config) || nuevoPrograma('Programa 1', config),
     bucle: false,
     seleccion: 0,
+    modoMando: 'articular',      // 'articular' | 'cartesiano' (deslizadores del panel VR)
+    tipoGrabacion: 'articular',  // tipo de movimiento de los puntos nuevos
     objetivoIK: null,  // THREE.Vector3 (mundo) mientras se arrastra el efector
     errorIK: 0,
     driver: null,
@@ -40,7 +57,7 @@ export function crearApp(config, brazoVisual) {
       app.avisar('mensaje');
     },
 
-    // --- Movimiento manual -------------------------------------------------
+    // --- Movimiento manual por articulación --------------------------------
     moverArticulacion(i, grados) {
       reproductor.detener();
       controlador.fijarObjetivo(i, grados);
@@ -59,11 +76,58 @@ export function crearApp(config, brazoVisual) {
     irAInicio() {
       reproductor.detener();
       controlador.fijarObjetivos(config.articulaciones.map((a) => a.inicial ?? 0));
+      controlador.fijarPinza(pz.inicial);
       app.informar('Volviendo a la pose de inicio');
     },
     detenerTodo() {
       reproductor.detener();
       controlador.congelar();
+    },
+    alternarModoMando() {
+      app.modoMando = app.modoMando === 'articular' ? 'cartesiano' : 'articular';
+      app.avisar('modo');
+    },
+
+    // --- Pinza --------------------------------------------------------------
+    fijarPinzaMM(mm) {
+      reproductor.detener();
+      controlador.fijarPinza(mm / 1000);
+    },
+    alternarPinza() {
+      const abierta = controlador.pinzaObjetivo > (pz.aperturaMin + pz.aperturaMax) / 2;
+      app.fijarPinzaMM((abierta ? pz.aperturaMin : pz.aperturaMax) * 1000);
+      app.informar(abierta ? 'Cerrando pinza' : 'Abriendo pinza');
+    },
+    pinzaAbierta() {
+      return controlador.pinzaObjetivo > (pz.aperturaMin + pz.aperturaMax) / 2;
+    },
+
+    // --- Cartesiano: posición de la punta en mm desde la base --------------
+    // Posición objetivo de la punta (mm, coordenadas de la base del brazo).
+    puntaObjetivoMM() {
+      return cinematica.fk(controlador.objetivo).clone().multiplyScalar(1000);
+    },
+    puntaRealMM() {
+      return cinematica.fk(controlador.actual).clone().multiplyScalar(1000);
+    },
+    moverPuntaLocal(local, iteraciones = 15) {
+      const r = resolverIK(cadenaIK, config, controlador.objetivo, local, { iteraciones });
+      app.errorIK = r.error;
+      controlador.fijarObjetivos(r.angulos);
+      return r;
+    },
+    // eje: 'x' | 'y' | 'z'; mm: nuevo valor
+    moverPuntaEje(eje, mm) {
+      reproductor.detener();
+      const p = app.puntaObjetivoMM().multiplyScalar(0.001);
+      p[eje] = mm / 1000;
+      app.moverPuntaLocal(p, 40);
+    },
+    sumarPuntaEje(eje, deltaMM) {
+      reproductor.detener();
+      const p = app.puntaObjetivoMM().multiplyScalar(0.001);
+      p[eje] += deltaMM / 1000;
+      app.moverPuntaLocal(p, 40);
     },
 
     // --- Cinemática inversa (arrastrar el efector) -------------------------
@@ -76,10 +140,7 @@ export function crearApp(config, brazoVisual) {
       if (!app.objetivoIK) app.iniciarArrastreEfector();
       app.objetivoIK.copy(puntoMundo);
       brazoVisual.raiz.updateMatrixWorld(true);
-      const local = brazoVisual.raiz.worldToLocal(puntoMundo.clone());
-      const r = resolverIK(cadenaIK, config, controlador.objetivo, local);
-      app.errorIK = r.error;
-      controlador.fijarObjetivos(r.angulos);
+      app.moverPuntaLocal(brazoVisual.raiz.worldToLocal(puntoMundo.clone()));
     },
     terminarArrastreEfector() {
       app.objetivoIK = null;
@@ -90,15 +151,21 @@ export function crearApp(config, brazoVisual) {
       almacen.guardarActual(app.programa);
       app.avisar('programa');
     },
+    alternarTipoGrabacion() {
+      app.tipoGrabacion = app.tipoGrabacion === 'articular' ? 'lineal' : 'articular';
+      app.avisar('modo');
+    },
     grabarPunto() {
-      app.programa.puntos.push(nuevoPunto(controlador.objetivo));
+      app.programa.puntos.push(nuevoPunto(controlador.objetivo, controlador.pinzaObjetivo, app.tipoGrabacion));
       app.guardarCambios();
-      app.informar(`Punto P${app.programa.puntos.length} grabado`);
+      app.informar(`Punto P${app.programa.puntos.length} grabado (${app.tipoGrabacion})`);
     },
     reemplazarPunto(i) {
       const p = app.programa.puntos[i];
       if (!p) return;
-      p.angulos = nuevoPunto(controlador.objetivo).angulos;
+      const n = nuevoPunto(controlador.objetivo, controlador.pinzaObjetivo);
+      p.angulos = n.angulos;
+      p.pinza = n.pinza;
       app.guardarCambios();
       app.informar(`P${i + 1} reemplazado por la pose actual`);
     },
@@ -124,6 +191,8 @@ export function crearApp(config, brazoVisual) {
       if (!p) return;
       if (campo === 'velocidad') p.velocidad = Math.min(100, Math.max(5, Number(valor) || 100));
       if (campo === 'pausa') p.pausa = Math.min(60, Math.max(0, Number(valor) || 0));
+      if (campo === 'pinza') p.pinza = Math.min(pz.aperturaMax * 1000, Math.max(pz.aperturaMin * 1000, Number(valor) || 0));
+      if (campo === 'tipo') p.tipo = valor === 'lineal' ? 'lineal' : 'articular';
       app.guardarCambios();
     },
     irAPunto(i) {
@@ -217,7 +286,7 @@ export function crearApp(config, brazoVisual) {
   };
 
   reproductor.alCambiar = () => app.avisar('reproduccion');
-  controlador.alEnviar = (angulos) => app.driver?.enviarAngulos(angulos);
+  controlador.alEnviar = (angulos, pinza) => app.driver?.enviarAngulos(angulos, pinza);
 
   return app;
 }

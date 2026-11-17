@@ -172,28 +172,35 @@ export function crearCamaras({ renderer, escena, brazo, config }) {
   escena.add(tripode);
 
   // Pantallas a la derecha del brazo, una sobre otra, giradas hacia el usuario.
+  // Cada una es independiente para poder moverla en VR.
   const pantallas = [new Pantalla('Cámara pinza'), new Pantalla('Cámara ambiente')];
   const virtuales = [camPinza, camAmbiente];
-  const grupo = new THREE.Group();
-  grupo.position.set(bx + 0.66, by + 0.42, bz + 0.12);
-  grupo.rotation.y = -0.55;
+  const ubicador = new THREE.Group();
+  ubicador.position.set(bx + 0.66, by + 0.42, bz + 0.12);
+  ubicador.rotation.y = -0.55;
+  escena.add(ubicador);
   pantallas[0].grupo.position.y = 0.23;
   pantallas[1].grupo.position.y = -0.22;
-  pantallas.forEach((p) => grupo.add(p.grupo));
-  escena.add(grupo);
+  pantallas.forEach((p) => {
+    ubicador.add(p.grupo);
+    ubicador.updateMatrixWorld(true);
+    escena.attach(p.grupo);
+  });
+  escena.remove(ubicador);
   pantallas.forEach((p, i) => p.fijarVirtual(virtuales[i], 'Simulada'));
 
+  let visibles = true;
   let turno = 0;
-  const fondo = new THREE.Color();
+  const fondoCam = new THREE.Color(0x1d2127);
 
   return {
     pantallas,
-    grupo,
     get visibles() {
-      return grupo.visible;
+      return visibles;
     },
     fijarVisibles(v) {
-      grupo.visible = v;
+      visibles = v;
+      pantallas.forEach((p) => { p.grupo.visible = v; });
     },
     usarVirtual(i) {
       pantallas[i].fijarVirtual(virtuales[i], 'Simulada');
@@ -206,24 +213,24 @@ export function crearCamaras({ renderer, escena, brazo, config }) {
     },
     // Renderiza una cámara virtual por cuadro (alternando) para no cargar al Quest.
     actualizar() {
-      if (!grupo.visible) return;
+      if (!visibles) return;
       const activas = pantallas.filter((p) => p.fuente.tipo === 'virtual');
       if (!activas.length) return;
       const p = activas[turno++ % activas.length];
       const xr = renderer.xr.enabled;
       const anterior = renderer.getRenderTarget();
-      renderer.getClearColor(fondo);
+      const fondo = escena.background;
+      if (!fondo) escena.background = fondoCam; // en modo mixto el fondo es transparente
       // Ocultar pantallas, modelos de cámara y asa para que no tapen la vista.
-      grupo.visible = false;
-      const ocultos = [modeloPinza, modeloAmb, brazo.asa].filter((o) => o.visible);
+      const ocultos = [modeloPinza, modeloAmb, brazo.asa, ...pantallas.map((q) => q.grupo)].filter((o) => o.visible);
       ocultos.forEach((o) => { o.visible = false; });
       renderer.xr.enabled = false;
       renderer.setRenderTarget(p.rt);
       renderer.render(escena, p.fuente.camara);
       renderer.setRenderTarget(anterior);
       renderer.xr.enabled = xr;
-      grupo.visible = true;
       ocultos.forEach((o) => { o.visible = true; });
+      escena.background = fondo;
     },
   };
 }

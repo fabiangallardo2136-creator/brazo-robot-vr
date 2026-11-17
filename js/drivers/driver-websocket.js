@@ -35,8 +35,8 @@ export class DriverWebSocket {
     this.conectado = false;
   }
 
-  enviarAngulos(angulos) {
+  enviarAngulos(angulos, pinza) {
     if (!this.conectado || this.socket?.readyState !== WebSocket.OPEN) return;
-    this.socket.send(tramaServos(angulos, this.config));
+    this.socket.send(tramaServos(angulos, this.config, pinza));
   }
 }

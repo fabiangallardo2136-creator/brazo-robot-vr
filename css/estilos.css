@@ -141,3 +141,7 @@ ol.puntos li.vacio { color: var(--tenue); font-style: italic; }
   .ayuda { display: none; }
 }
 .etiqueta-fuente { width: 120px; align-self: center; color: var(--tenue); }
+.botones-xr { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+button.vr.mixto { background: #6cc070; border-color: #6cc070; }
+.subtitulo { margin: 10px 0 4px; font-size: 12px; color: var(--tenue); }
+select.chico { flex: 0 0 auto; padding: 2px 4px; }

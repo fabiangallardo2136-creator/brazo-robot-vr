@@ -93,10 +93,17 @@ export function crearBrazoVisual(config) {
   const soporte = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.012, 0.025), matPinza);
   soporte.position.set(0, largoH * 0.45, 0);
   ultima.add(soporte);
-  for (const lado of [-1, 1]) {
+  const dedos = [-1, 1].map((lado) => {
     const dedo = new THREE.Mesh(new THREE.BoxGeometry(0.008, largoH * 0.55, 0.02), matPinza);
-    dedo.position.set(lado * 0.022, largoH * 0.45 + largoH * 0.275, 0);
+    dedo.position.set(lado * 0.024, largoH * 0.45 + largoH * 0.275, 0);
+    dedo.userData.lado = lado;
     ultima.add(dedo);
+    return dedo;
+  });
+
+  // Apertura de la pinza en metros (distancia libre entre los dedos).
+  function fijarPinza(apertura) {
+    for (const d of dedos) d.position.x = d.userData.lado * (apertura / 2 + 0.004);
   }
 
   // Asa del efector: esfera visible y zona de agarre invisible más grande.
@@ -123,5 +130,13 @@ export function crearBrazoVisual(config) {
     matAsa.emissive.setHex(activo ? 0xaa5500 : 0x552200);
   }
 
-  return { ...cadena, asa, zonaAgarre, resaltarMotor, resaltarAsa };
+  // Base y pedestal: zona para agarrar y mover el brazo completo en VR.
+  const zonaBase = new THREE.Mesh(
+    new THREE.CylinderGeometry(b.radio * 1.3, b.radio * 1.3, b.altura + 0.04, 16),
+    new THREE.MeshBasicMaterial({ visible: false }),
+  );
+  zonaBase.position.y = (b.altura + 0.04) / 2;
+  cadena.raiz.add(zonaBase);
+
+  return { ...cadena, asa, zonaAgarre, zonaBase, resaltarMotor, resaltarAsa, fijarPinza };
 }

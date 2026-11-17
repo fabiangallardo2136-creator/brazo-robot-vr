@@ -16,7 +16,7 @@ const COLOR = {
 };
 
 export class PanelVR {
-  constructor({ ancho = 1024, alto = 980, anchoMetros = 0.62 } = {}) {
+  constructor({ ancho = 1024, alto = 1040, anchoMetros = 0.6 } = {}) {
     this.ancho = ancho;
     this.alto = alto;
     this.canvas = document.createElement('canvas');
@@ -230,37 +230,67 @@ function redondeado(ctx, x, y, w, h, r) {
 // Arma el contenido del panel principal a partir de la app.
 export function construirPanelPrincipal(panel, app) {
   const art = app.config.articulaciones;
+  const pz = app.config.herramienta.pinza;
   const c = app.controlador;
   const r = app.reproductor;
   const M = 40;           // margen
   const W = panel.ancho - 2 * M;
+  const articular = () => app.modoMando === 'articular';
+  const cartesiano = () => app.modoMando === 'cartesiano';
 
-  panel.agregar({ tipo: 'texto', x: M, y: 50, tam: 38, negrita: true, texto: () => 'Brazo 6 GDL' });
+  panel.agregar({ tipo: 'texto', x: M, y: 46, tam: 36, negrita: true, texto: () => 'Brazo 6 GDL' });
   panel.agregar({
-    tipo: 'texto', x: panel.ancho - M, y: 50, tam: 28, alinear: 'right', color: COLOR.tenue,
+    tipo: 'texto', x: panel.ancho - M, y: 46, tam: 26, alinear: 'right', color: COLOR.tenue,
     texto: () => {
       const n = app.programa.puntos.length;
       if (r.activo && r.programa === app.programa) {
-        return `${r.fase === 'esperando' ? 'Pausa en' : 'Hacia'} P${r.indice + 1}/${n}${app.bucle ? ' · bucle' : ''}`;
+        const fase = { moviendo: 'Hacia', pinza: 'Pinza en', esperando: 'Pausa en' }[r.fase] ?? '';
+        return `${fase} P${r.indice + 1}/${n}${app.bucle ? ' · bucle' : ''}`;
       }
-      if (app.objetivoIK) return `Efector · error ${(app.errorIK * 1000).toFixed(0)} mm`;
+      if (app.objetivoIK) return `Punta · error ${(app.errorIK * 1000).toFixed(0)} mm`;
       return `${app.programa.nombre} · ${n} punto${n === 1 ? '' : 's'}`;
     },
   });
 
-  let y = 90;
-  const altoFila = 74;
+  let y = 80;
+  const altoFila = 62;
+
+  // J1–J3 en modo articular; X, Y, Z en modo cartesiano.
+  const ejes = ['x', 'y', 'z'];
+  const rangos = { x: [-500, 500], y: [-150, 600], z: [-500, 500] };
   art.forEach((a, i) => {
     panel.agregar({
       tipo: 'deslizador', x: M, y, w: W, h: altoFila - 6, min: a.min, max: a.max,
+      visible: i < 3 ? articular : undefined,
       etiqueta: () => `${a.id} ${a.nombre}`,
       valor: () => c.objetivo[i],
       real: () => c.actual[i],
       fijar: (v) => app.moverArticulacion(i, Math.round(v)),
       texto: () => `${c.actual[i].toFixed(0)}°`,
     });
+    if (i < 3) {
+      const eje = ejes[i];
+      panel.agregar({
+        tipo: 'deslizador', x: M, y, w: W, h: altoFila - 6, min: rangos[eje][0], max: rangos[eje][1],
+        visible: cartesiano,
+        etiqueta: () => `Punta ${eje.toUpperCase()} (mm)`,
+        valor: () => app.puntaObjetivoMM()[eje],
+        real: () => app.puntaRealMM()[eje],
+        fijar: (v) => app.moverPuntaEje(eje, Math.round(v)),
+        texto: () => `${app.puntaRealMM()[eje].toFixed(0)}`,
+      });
+    }
     y += altoFila;
   });
+  panel.agregar({
+    tipo: 'deslizador', x: M, y, w: W, h: altoFila - 6, min: pz.aperturaMin * 1000, max: pz.aperturaMax * 1000,
+    etiqueta: () => 'Pinza (mm)',
+    valor: () => c.pinzaObjetivo * 1000,
+    real: () => c.pinzaActual * 1000,
+    fijar: (v) => app.fijarPinzaMM(Math.round(v)),
+    texto: () => `${(c.pinzaActual * 1000).toFixed(0)} mm`,
+  });
+  y += altoFila;
   panel.agregar({
     tipo: 'deslizador', x: M, y, w: W, h: altoFila - 6, min: 10, max: 100,
     etiqueta: () => 'Velocidad',
@@ -271,14 +301,15 @@ export function construirPanelPrincipal(panel, app) {
     },
     texto: () => `${Math.round(c.velocidad * 100)} %`,
   });
-  y += altoFila + 14;
+  y += altoFila + 10;
 
-  const anchoB = (W - 2 * 18) / 3;
-  const altoB = 84;
+  const anchoB = (W - 2 * 16) / 3;
+  const altoB = 70;
   const fila = (botones) => {
-    botones.forEach((b, k) => panel.agregar({ tipo: 'boton', x: M + k * (anchoB + 18), y, w: anchoB, h: altoB, ...b }));
-    y += altoB + 16;
+    botones.forEach((b, k) => panel.agregar({ tipo: 'boton', x: M + k * (anchoB + 16), y, w: anchoB, h: altoB, ...b }));
+    y += altoB + 12;
   };
+  const corto = (t, n = 9) => (t.length > n ? `${t.slice(0, n - 1)}…` : t);
   fila([
     { texto: () => '● Grabar punto', accion: () => app.grabarPunto() },
     {
@@ -289,11 +320,23 @@ export function construirPanelPrincipal(panel, app) {
     { texto: () => 'Borrar último', accion: () => app.borrarUltimo() },
   ]);
   fila([
+    { texto: () => (app.pinzaAbierta() ? 'Cerrar pinza' : 'Abrir pinza'), accion: () => app.alternarPinza() },
+    {
+      texto: () => (articular() ? 'Mando: ángulos' : 'Mando: X Y Z'),
+      activo: cartesiano,
+      accion: () => app.alternarModoMando(),
+    },
+    {
+      texto: () => (app.tipoGrabacion === 'lineal' ? 'Grabar: lineal' : 'Grabar: articular'),
+      activo: () => app.tipoGrabacion === 'lineal',
+      accion: () => app.alternarTipoGrabacion(),
+    },
+  ]);
+  fila([
     { texto: () => `↻ Bucle: ${app.bucle ? 'sí' : 'no'}`, activo: () => app.bucle, accion: () => app.alternarBucle() },
     { texto: () => 'Ir a inicio', accion: () => app.irAInicio() },
     { texto: () => 'Guardar', accion: () => app.guardar() },
   ]);
-  const corto = (t) => (t.length > 11 ? `${t.slice(0, 10)}…` : t);
   fila([
     {
       texto: () => `Pantallas: ${app.camaras?.visibles ? 'sí' : 'no'}`,
@@ -303,8 +346,17 @@ export function construirPanelPrincipal(panel, app) {
     { texto: () => `Pinza: ${corto(app.nombreFuente?.(0) ?? '—')}`, accion: () => app.ciclarFuente?.(0) },
     { texto: () => `Amb.: ${corto(app.nombreFuente?.(1) ?? '—')}`, accion: () => app.ciclarFuente?.(1) },
   ]);
+  fila([
+    {
+      texto: () => `Mesa virtual: ${app.entornoVisible?.() ? 'sí' : 'no'}`,
+      activo: () => !!app.entornoVisible?.(),
+      accion: () => app.alternarEntorno?.(),
+    },
+    { texto: () => 'Reiniciar cubos', accion: () => app.reiniciarCubos?.() },
+    { texto: () => 'Ordenar todo', accion: () => app.restablecerPosiciones?.() },
+  ]);
   panel.agregar({
-    tipo: 'texto', x: M, y: y + 14, tam: 26, color: COLOR.tenue,
-    texto: () => app.mensaje || 'Gatillo: usar el panel · Grip o gatillo sobre la esfera: mover el efector',
+    tipo: 'texto', x: M, y: y + 12, tam: 24, color: COLOR.tenue,
+    texto: () => app.mensaje || 'Gatillo: panel o punta · Grip: punta, o mover panel/pantallas/brazo',
   });
 }

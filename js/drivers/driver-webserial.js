@@ -38,9 +38,9 @@ export class DriverWebSerial {
     this.conectado = false;
   }
 
-  enviarAngulos(angulos) {
+  enviarAngulos(angulos, pinza) {
     if (!this.conectado || !this.escritor) return;
-    // TODO v2: this.escritor.write(tramaServos(angulos, this.config) + '\n');
+    // TODO v2: this.escritor.write(tramaServos(angulos, this.config, pinza) + '\n');
     void tramaServos;
   }
 }

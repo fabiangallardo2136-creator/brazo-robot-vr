@@ -1,16 +1,19 @@
-// Controlador de articulaciones: guarda el ángulo objetivo de cada una y hace
-// avanzar el ángulo "real" hacia él sin pasar la velocidad máxima, igual que
-// lo haría un servo. Envía los ángulos reales al driver a una tasa fija.
+// Controlador de articulaciones y pinza: guarda el valor objetivo de cada eje
+// y hace avanzar el valor "real" hacia él sin pasar la velocidad máxima, igual
+// que lo haría un servo. Envía los valores reales al driver a una tasa fija.
 export class Controlador {
   constructor(config) {
     this.art = config.articulaciones;
+    this.cfgPinza = config.herramienta.pinza;
     this.objetivo = this.art.map((a) => this.limitar(a, a.inicial ?? 0));
     this.actual = this.objetivo.slice();
+    this.pinzaObjetivo = this.cfgPinza.inicial;
+    this.pinzaActual = this.pinzaObjetivo;
     this.velocidad = 1;          // fracción de velMax (0,1–1)
     this.periodoEnvio = 1 / 25;  // 25 envíos por segundo como máximo
-    this.alEnviar = null;        // función(angulos) que pone la app
+    this.alEnviar = null;        // función(angulos, aperturaPinza) que pone la app
     this._t = 0;
-    this._ultimoEnviado = null;
+    this._ultimoEnviado = '';
   }
 
   limitar(a, v) {
@@ -25,9 +28,20 @@ export class Controlador {
     angulos.forEach((v, i) => this.fijarObjetivo(i, v));
   }
 
+  // Apertura de la pinza en metros.
+  fijarPinza(m) {
+    const p = this.cfgPinza;
+    this.pinzaObjetivo = Math.min(p.aperturaMax, Math.max(p.aperturaMin, Number(m) || 0));
+  }
+
+  pinzaLlego(tol = 0.0005) {
+    return Math.abs(this.pinzaActual - this.pinzaObjetivo) <= tol;
+  }
+
   // Deja el objetivo donde está el brazo (para detener en seco).
   congelar() {
     this.objetivo = this.actual.slice();
+    this.pinzaObjetivo = this.pinzaActual;
   }
 
   velocidadDe(i) {
@@ -48,14 +62,19 @@ export class Controlador {
       const paso = this.velocidadDe(i) * dt;
       this.actual[i] += Math.max(-paso, Math.min(paso, d));
     }
+    const dp = this.pinzaObjetivo - this.pinzaActual;
+    const pasoP = this.cfgPinza.velocidad * this.velocidad * dt;
+    this.pinzaActual += Math.max(-pasoP, Math.min(pasoP, dp));
+
     this._t += dt;
     if (this.alEnviar && this._t >= this.periodoEnvio) {
       this._t = 0;
-      const redondeado = this.actual.map((v) => Math.round(v * 10) / 10);
-      const igual = this._ultimoEnviado && redondeado.every((v, i) => v === this._ultimoEnviado[i]);
-      if (!igual) {
-        this._ultimoEnviado = redondeado;
-        this.alEnviar(redondeado);
+      const angulos = this.actual.map((v) => Math.round(v * 10) / 10);
+      const pinza = Math.round(this.pinzaActual * 10000) / 10000;
+      const clave = `${angulos.join(',')}|${pinza}`;
+      if (clave !== this._ultimoEnviado) {
+        this._ultimoEnviado = clave;
+        this.alEnviar(angulos, pinza);
       }
     }
   }

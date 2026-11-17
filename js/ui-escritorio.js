@@ -1,5 +1,5 @@
 // Panel HTML lateral para escritorio y atajos de teclado.
-import { almacen } from './programa.js';
+import { almacen, TIPOS } from './programa.js';
 import { exportarJSON } from './programa.js';
 import { DRIVERS } from './drivers/index.js';
 
@@ -56,12 +56,45 @@ export function crearUIEscritorio(raiz, app, { alMostrarPanel3D }) {
   });
   const posEfector = h('div', { class: 'dato' }, '');
 
+  // Pinza
+  const pz = app.config.herramienta.pinza;
+  const pinzaRango = h('input', {
+    type: 'range', min: pz.aperturaMin * 1000, max: pz.aperturaMax * 1000, step: 1, value: c.pinzaObjetivo * 1000,
+    'aria-label': 'Apertura de la pinza',
+    oninput: (e) => app.fijarPinzaMM(Number(e.target.value)),
+  });
+  const pinzaReal = h('span', { class: 'real' }, '');
+  const botonPinza = h('button', { onclick: () => app.alternarPinza() }, 'Cerrar pinza (G)');
+
+  // Mando cartesiano: posición de la punta en mm desde la base
+  const ejesCart = ['x', 'y', 'z'].map((eje) => {
+    const numero = h('input', {
+      type: 'number', step: 5, class: 'num', 'aria-label': `Punta ${eje.toUpperCase()} en mm`,
+      onchange: (e) => app.moverPuntaEje(eje, Number(e.target.value)),
+    });
+    const fila = h('div', { class: 'control' },
+      h('span', { class: 'id' }, eje.toUpperCase()),
+      h('button', { title: '−10 mm', onclick: () => app.sumarPuntaEje(eje, -10) }, '−10'),
+      h('button', { title: '−1 mm', onclick: () => app.sumarPuntaEje(eje, -1) }, '−1'),
+      numero,
+      h('button', { title: '+1 mm', onclick: () => app.sumarPuntaEje(eje, 1) }, '+1'),
+      h('button', { title: '+10 mm', onclick: () => app.sumarPuntaEje(eje, 10) }, '+10'));
+    return { eje, numero, fila };
+  });
+
   const secArticulaciones = h('section', {},
     h('h2', {}, 'Articulaciones'),
     ...filas.map((f) => f.fila),
     h('div', { class: 'articulacion' },
       h('div', { class: 'cabecera' }, h('span', { class: 'nombre' }, 'Velocidad (% de la máxima)')),
       h('div', { class: 'control' }, velocidad, velTexto)),
+    h('div', { class: 'articulacion' },
+      h('div', { class: 'cabecera' }, h('span', { class: 'id' }, 'Pinza'), h('span', { class: 'nombre' }, 'apertura en mm'),
+        h('span', { class: 'limites' }, `${pz.aperturaMin * 1000} … ${pz.aperturaMax * 1000} mm`)),
+      h('div', { class: 'control' }, pinzaRango, pinzaReal),
+      h('div', { class: 'botones' }, botonPinza)),
+    h('div', { class: 'subtitulo' }, 'Mover la punta en línea recta (cinemática inversa, mm desde la base)'),
+    ...ejesCart.map((e) => e.fila),
     posEfector,
     h('div', { class: 'botones' },
       h('button', { onclick: () => app.irAInicio() }, 'Ir a inicio (H)'),
@@ -77,6 +110,10 @@ export function crearUIEscritorio(raiz, app, { alMostrarPanel3D }) {
   const lista = h('ol', { class: 'puntos' });
   const botonPlay = h('button', { class: 'primario', onclick: () => app.alternarReproduccion() }, '▶ Reproducir');
   const bucle = h('input', { type: 'checkbox', onchange: () => app.alternarBucle() });
+  const tipoGrab = h('select', {
+    'aria-label': 'Tipo de movimiento de los puntos nuevos',
+    onchange: (e) => { if (e.target.value !== app.tipoGrabacion) app.alternarTipoGrabacion(); },
+  }, ...Object.entries(TIPOS).map(([id, n]) => h('option', { value: id }, n)));
 
   function dibujarLista() {
     nombre.value = app.programa.nombre;
@@ -90,6 +127,14 @@ export function crearUIEscritorio(raiz, app, { alMostrarPanel3D }) {
           h('strong', {}, `P${i + 1}`),
           h('span', { class: 'angulos' }, p.angulos.map((v) => Math.round(v)).join(' · '))),
         h('div', { class: 'p-ctl' },
+          h('select', {
+            class: 'chico', title: 'Tipo de movimiento hacia este punto',
+            onchange: (e) => app.editarPunto(i, 'tipo', e.target.value),
+          }, ...Object.entries(TIPOS).map(([id, n]) => h('option', { value: id, selected: p.tipo === id }, n))),
+          h('label', {}, 'pinza ', h('input', {
+            type: 'number', min: pz.aperturaMin * 1000, max: pz.aperturaMax * 1000, step: 1, value: p.pinza, class: 'num-chico',
+            onchange: (e) => app.editarPunto(i, 'pinza', e.target.value),
+          }), 'mm'),
           h('label', {}, 'vel ', h('input', {
             type: 'number', min: 5, max: 100, step: 5, value: p.velocidad, class: 'num-chico',
             onchange: (e) => app.editarPunto(i, 'velocidad', e.target.value),
@@ -126,6 +171,8 @@ export function crearUIEscritorio(raiz, app, { alMostrarPanel3D }) {
     h('div', { class: 'botones' },
       h('button', { class: 'primario', onclick: () => app.grabarPunto() }, '● Grabar punto (R)'),
       botonPlay),
+    h('div', { class: 'botones' },
+      h('span', { class: 'etiqueta-fuente' }, 'Grabar puntos como'), tipoGrab),
     h('label', { class: 'check' }, bucle, ' Repetir en bucle'),
     lista,
   );
@@ -184,6 +231,7 @@ export function crearUIEscritorio(raiz, app, { alMostrarPanel3D }) {
     onchange: (e) => app.fijarFuente(i, e.target.value),
   }));
   const verPantallas = h('input', { type: 'checkbox', checked: true, onchange: () => app.alternarPantallas() });
+  const verEntorno = h('input', { type: 'checkbox', checked: true, onchange: () => app.alternarEntorno() });
   function dibujarCamaras() {
     const ops = app.opcionesFuente();
     selFuentes.forEach((s, i) => {
@@ -193,16 +241,24 @@ export function crearUIEscritorio(raiz, app, { alMostrarPanel3D }) {
     verPantallas.checked = app.camaras.visibles;
   }
   const secCamaras = h('section', {},
-    h('h2', {}, 'Cámaras'),
+    h('h2', {}, 'Cámaras y escena'),
     ...app.camaras.pantallas.map((p, i) => h('div', { class: 'botones' },
       h('span', { class: 'etiqueta-fuente' }, p.titulo), selFuentes[i])),
     h('div', { class: 'botones' },
       h('button', { onclick: () => app.buscarWebcams() }, 'Buscar webcams de este equipo')),
     h('label', { class: 'check' }, verPantallas, ' Mostrar las pantallas en la escena'),
+    h('label', { class: 'check' }, verEntorno, ' Mostrar piso, mesa y cubos'),
+    h('div', { class: 'botones' },
+      h('button', { onclick: () => app.reiniciarCubos() }, 'Reiniciar cubos'),
+      h('button', { onclick: () => app.restablecerPosiciones() }, 'Ordenar panel y pantallas')),
     h('div', { class: 'dato' }, 'Simulada = lo que vería una cámara en esa posición. La transmisión desde el brazo real queda para la versión 2.'),
   );
   dibujarCamaras();
-  app.alCambiar((t) => { if (t === 'camaras') dibujarCamaras(); });
+  app.alCambiar((t) => {
+    if (t === 'camaras') dibujarCamaras();
+    if (t === 'entorno') verEntorno.checked = app.entornoVisible();
+    if (t === 'modo') tipoGrab.value = app.tipoGrabacion;
+  });
 
   raiz.append(secArticulaciones, secPrograma, secCamaras, secArchivos, secHardware);
 
@@ -240,6 +296,7 @@ export function crearUIEscritorio(raiz, app, { alMostrarPanel3D }) {
     else if ((e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') && t.type !== 'range') app.sumarArticulacion(app.seleccion, paso);
     else if ((e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') && t.type !== 'range') app.sumarArticulacion(app.seleccion, -paso);
     else if (e.key === 'r' || e.key === 'R') app.grabarPunto();
+    else if (e.key === 'g' || e.key === 'G') app.alternarPinza();
     else if (e.key === ' ') app.alternarReproduccion();
     else if (e.key === 'h' || e.key === 'H') app.irAInicio();
     else if (e.key === 'Escape') app.detenerTodo();
@@ -259,6 +316,13 @@ export function crearUIEscritorio(raiz, app, { alMostrarPanel3D }) {
         const enMov = Math.abs(c.actual[i] - c.objetivo[i]) > 0.5;
         f.real.textContent = `${c.actual[i].toFixed(1)}°`;
         f.real.classList.toggle('moviendo', enMov);
+      });
+      pinzaReal.textContent = `${(c.pinzaActual * 1000).toFixed(0)} mm`;
+      if (document.activeElement !== pinzaRango) pinzaRango.value = c.pinzaObjetivo * 1000;
+      botonPinza.textContent = app.pinzaAbierta() ? 'Cerrar pinza (G)' : 'Abrir pinza (G)';
+      const obj = app.puntaObjetivoMM();
+      ejesCart.forEach((e) => {
+        if (document.activeElement !== e.numero) e.numero.value = Math.round(obj[e.eje]);
       });
       const p = posLocalEfector;
       posEfector.textContent = `Efector (desde la base): X ${(p.x * 1000).toFixed(0)} · Y ${(p.y * 1000).toFixed(0)} · Z ${(p.z * 1000).toFixed(0)} mm`

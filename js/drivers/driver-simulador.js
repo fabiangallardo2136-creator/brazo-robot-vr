@@ -7,7 +7,8 @@
 //   conectado: boolean
 //   async conectar(): Promise<void>      (puede pedir permisos al usuario)
 //   async desconectar(): Promise<void>
-//   enviarAngulos(angulos: number[]): void   ángulos en grados, orden J1..J6
+//   enviarAngulos(angulos: number[], pinza: number): void
+//       ángulos en grados (orden J1..J6) y apertura de la pinza en metros
 //   alCambiarEstado: function(texto) | null  (lo asigna la app)
 import { tramaServos } from './protocolo.js';
 
@@ -31,10 +32,10 @@ export class DriverSimulador {
     this.alCambiarEstado?.('Simulador detenido');
   }
 
-  enviarAngulos(angulos) {
+  enviarAngulos(angulos, pinza) {
     if (!this.conectado) return;
     this.mensajes++;
     // Se arma la misma trama que se mandaría al ESP32, para poder revisarla.
-    this.ultimaTrama = tramaServos(angulos, this.config);
+    this.ultimaTrama = tramaServos(angulos, this.config, pinza);
   }
 }

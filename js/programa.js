@@ -2,37 +2,51 @@
 //
 // Formato JSON de un programa (el mismo para localStorage y para exportar):
 // {
-//   "formato": "brazo-robot-vr/programa", "version": 1,
+//   "formato": "brazo-robot-vr/programa", "version": 2,
 //   "nombre": "Pick and place",
 //   "brazo": "Brazo 6 GDL de escritorio (genérico)",
 //   "articulaciones": ["J1", "J2", "J3", "J4", "J5", "J6"],
 //   "puntos": [
-//     { "angulos": [0, 15, 75, 0, 70, 0], "velocidad": 100, "pausa": 0.5 }
+//     { "angulos": [0, 15, 75, 0, 70, 0], "pinza": 40, "tipo": "articular",
+//       "velocidad": 100, "pausa": 0.5 }
 //   ]
 // }
-// velocidad: % de la velocidad máxima de cada articulación para llegar a ese punto.
+// pinza: apertura en milímetros al llegar al punto.
+// tipo: "articular" (cada articulación va directo a su ángulo; la punta hace
+//       una curva) o "lineal" (la punta va en línea recta).
+// velocidad: % de la velocidad máxima para llegar a ese punto.
 // pausa: segundos de espera al llegar.
+// Los programas de la versión 1 (sin pinza ni tipo) se siguen pudiendo abrir.
+
+import * as THREE from 'three';
 
 export const FORMATO = 'brazo-robot-vr/programa';
+export const TIPOS = { articular: 'Articular', lineal: 'Lineal' };
 const CLAVE_PROGRAMAS = 'brazoVR.programas';
 const CLAVE_ACTUAL = 'brazoVR.programaActual';
 
 const limitarNum = (v, min, max, def) => {
   const n = Number(v);
-  return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : def;
+  return v !== null && v !== undefined && v !== '' && Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : def;
 };
 
 export function nuevoPrograma(nombre, config) {
   return {
-    formato: FORMATO, version: 1, nombre,
+    formato: FORMATO, version: 2, nombre,
     brazo: config.nombre,
     articulaciones: config.articulaciones.map((a) => a.id),
     puntos: [],
   };
 }
 
-export function nuevoPunto(angulos) {
-  return { angulos: angulos.map((v) => Math.round(v * 10) / 10), velocidad: 100, pausa: 0 };
+export function nuevoPunto(angulos, aperturaM, tipo = 'articular') {
+  return {
+    angulos: angulos.map((v) => Math.round(v * 10) / 10),
+    pinza: Math.round(aperturaM * 10000) / 10,
+    tipo,
+    velocidad: 100,
+    pausa: 0,
+  };
 }
 
 // Valida y limpia un programa leído de un archivo o de localStorage.
@@ -41,6 +55,7 @@ export function normalizarPrograma(datos, config) {
     throw new Error('El archivo no parece un programa: falta la lista "puntos".');
   }
   const art = config.articulaciones;
+  const pz = config.herramienta.pinza;
   const puntos = datos.puntos.map((p, i) => {
     const ang = Array.isArray(p) ? p : p?.angulos;
     if (!Array.isArray(ang) || ang.length !== art.length || ang.some((v) => !Number.isFinite(Number(v)))) {
@@ -48,8 +63,10 @@ export function normalizarPrograma(datos, config) {
     }
     return {
       angulos: ang.map((v, j) => limitarNum(v, art[j].min, art[j].max, 0)),
-      velocidad: limitarNum(p.velocidad, 5, 100, 100),
-      pausa: limitarNum(p.pausa, 0, 60, 0),
+      pinza: limitarNum(p?.pinza, pz.aperturaMin * 1000, pz.aperturaMax * 1000, pz.inicial * 1000),
+      tipo: p?.tipo === 'lineal' ? 'lineal' : 'articular',
+      velocidad: limitarNum(p?.velocidad, 5, 100, 100),
+      pausa: limitarNum(p?.pausa, 0, 60, 0),
     };
   });
   const prog = nuevoPrograma(String(datos.nombre || 'Programa importado').slice(0, 60), config);
@@ -61,7 +78,7 @@ export function normalizarPrograma(datos, config) {
 // Almacenamiento en el navegador (localStorage). Cada navegador (escritorio,
 // Quest) tiene el suyo: para pasar programas entre equipos, exportar/importar.
 // ---------------------------------------------------------------------------
-function leer(clave, def) {
+export function leerLocal(clave, def) {
   try {
     const t = localStorage.getItem(clave);
     return t ? JSON.parse(t) : def;
@@ -70,7 +87,7 @@ function leer(clave, def) {
   }
 }
 
-function escribir(clave, valor) {
+export function escribirLocal(clave, valor) {
   try {
     localStorage.setItem(clave, JSON.stringify(valor));
     return true;
@@ -81,28 +98,28 @@ function escribir(clave, valor) {
 
 export const almacen = {
   listar() {
-    return Object.keys(leer(CLAVE_PROGRAMAS, {})).sort((a, b) => a.localeCompare(b, 'es'));
+    return Object.keys(leerLocal(CLAVE_PROGRAMAS, {})).sort((a, b) => a.localeCompare(b, 'es'));
   },
   guardar(programa) {
-    const todos = leer(CLAVE_PROGRAMAS, {});
+    const todos = leerLocal(CLAVE_PROGRAMAS, {});
     todos[programa.nombre] = programa;
-    return escribir(CLAVE_PROGRAMAS, todos);
+    return escribirLocal(CLAVE_PROGRAMAS, todos);
   },
   cargar(nombre, config) {
-    const p = leer(CLAVE_PROGRAMAS, {})[nombre];
+    const p = leerLocal(CLAVE_PROGRAMAS, {})[nombre];
     return p ? normalizarPrograma(p, config) : null;
   },
   borrar(nombre) {
-    const todos = leer(CLAVE_PROGRAMAS, {});
+    const todos = leerLocal(CLAVE_PROGRAMAS, {});
     delete todos[nombre];
-    return escribir(CLAVE_PROGRAMAS, todos);
+    return escribirLocal(CLAVE_PROGRAMAS, todos);
   },
   guardarActual(programa) {
-    return escribir(CLAVE_ACTUAL, programa);
+    return escribirLocal(CLAVE_ACTUAL, programa);
   },
   cargarActual(config) {
     try {
-      const p = leer(CLAVE_ACTUAL, null);
+      const p = leerLocal(CLAVE_ACTUAL, null);
       return p ? normalizarPrograma(p, config) : null;
     } catch {
       return null;
@@ -124,18 +141,29 @@ export function exportarJSON(programa) {
 }
 
 // ---------------------------------------------------------------------------
-// Reproductor: lleva el objetivo del controlador de punto en punto con una
-// interpolación suave en espacio articular. La duración de cada tramo se
-// calcula para que ninguna articulación pase su velocidad máxima (la curva
-// suave tiene un pico de 1,5 veces la velocidad media, por eso el factor 1,5).
+// Reproductor. Para cada punto:
+//   1. "moviendo": lleva el brazo al punto. En modo articular interpola los
+//      ángulos; en modo lineal interpola la posición de la punta en línea
+//      recta y resuelve la cinemática inversa en cada cuadro. La curva es
+//      suave (pico de 1,5 veces la velocidad media, por eso el factor 1,5).
+//   2. "pinza": ajusta la apertura de la pinza y espera a que llegue.
+//   3. "esperando": la pausa del punto.
 // ---------------------------------------------------------------------------
 export class Reproductor {
-  constructor(controlador) {
+  /**
+   * @param controlador Controlador
+   * @param config configuración del brazo
+   * @param cinematica { fk(angulos) → Vector3 local, ik(semilla, Vector3 local) → angulos }
+   */
+  constructor(controlador, config, cinematica) {
     this.c = controlador;
+    this.config = config;
+    this.cin = cinematica;
     this.activo = false;
     this.indice = -1;
-    this.fase = 'detenido'; // 'moviendo' | 'esperando' | 'detenido'
+    this.fase = 'detenido'; // 'moviendo' | 'pinza' | 'esperando' | 'detenido'
     this.alCambiar = null;
+    this._p = new THREE.Vector3();
   }
 
   iniciar(programa, { bucle = false, desde = 0 } = {}) {
@@ -159,14 +187,20 @@ export class Reproductor {
   _tramo(i) {
     const p = this.programa.puntos[i];
     this.indice = i;
+    this.tipo = p.tipo === 'lineal' ? 'lineal' : 'articular';
     this.desde = this.c.actual.slice();
     this.hacia = p.angulos.map((v, j) => this.c.limitar(this.c.art[j], v));
     const fraccion = (p.velocidad ?? 100) / 100;
     let dur = 0;
     this.hacia.forEach((v, j) => {
-      const vel = this.c.velocidadDe(j) * fraccion;
-      dur = Math.max(dur, Math.abs(v - this.desde[j]) / vel);
+      dur = Math.max(dur, Math.abs(v - this.desde[j]) / (this.c.velocidadDe(j) * fraccion));
     });
+    if (this.tipo === 'lineal') {
+      this.p0 = this.cin.fk(this.desde).clone();
+      this.p1 = this.cin.fk(this.hacia).clone();
+      const velLin = (this.config.velLineal ?? 0.15) * this.c.velocidad * fraccion;
+      dur = Math.max(dur, this.p0.distanceTo(this.p1) / velLin);
+    }
     this.duracion = Math.max(0.05, dur * 1.5);
     this.t = 0;
     this.fase = 'moviendo';
@@ -179,8 +213,21 @@ export class Reproductor {
       this.t += dt;
       const s = Math.min(1, this.t / this.duracion);
       const e = s * s * (3 - 2 * s);
-      this.c.fijarObjetivos(this.desde.map((v, j) => v + (this.hacia[j] - v) * e));
+      const semilla = this.desde.map((v, j) => v + (this.hacia[j] - v) * e);
+      if (this.tipo === 'lineal' && s < 1) {
+        this._p.lerpVectors(this.p0, this.p1, e);
+        this.c.fijarObjetivos(this.cin.ik(semilla, this._p));
+      } else {
+        this.c.fijarObjetivos(semilla);
+      }
       if (s >= 1 && this.c.llego(this.hacia)) {
+        const pz = this.programa.puntos[this.indice].pinza;
+        if (pz !== undefined) this.c.fijarPinza(pz / 1000);
+        this.fase = 'pinza';
+        this.alCambiar?.();
+      }
+    } else if (this.fase === 'pinza') {
+      if (this.c.pinzaLlego()) {
         this.fase = 'esperando';
         this.espera = this.programa.puntos[this.indice].pausa ?? 0;
         this.alCambiar?.();

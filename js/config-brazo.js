@@ -73,7 +73,19 @@ export const BRAZO = {
   ],
 
   // Punto de trabajo de la herramienta (centro de la pinza), medido desde J6.
-  herramienta: { origen: [0, 0.07, 0] },
+  herramienta: {
+    origen: [0, 0.07, 0],
+    // Pinza de dos dedos paralelos. Apertura = distancia entre dedos (metros).
+    pinza: {
+      aperturaMin: 0, aperturaMax: 0.05, inicial: 0.05,
+      velocidad: 0.05, // m/s
+      // Servo de la pinza (versión 2): ángulo con la pinza abierta y cerrada.
+      servo: { canal: 6, abierta: 40, cerrada: 120 },
+    },
+  },
+
+  // Velocidad máxima de la punta en movimientos lineales (m/s).
+  velLineal: 0.15,
 
   // Dónde se apoya la base en la escena (sobre la mesa virtual).
   ubicacion: { posicion: [0, 0.75, -0.55], giroY: 0 },
